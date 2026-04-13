@@ -16,10 +16,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
-/**
- * Filtro que intercepta las solicitudes para validar y autenticar
- * el token JWT en el encabezado de la solicitud.
- */
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -33,18 +29,30 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
-        // Omite el filtro para las rutas de autenticación
-        if (request.getServletPath().contains("/api/auth")) {
+
+        String path = request.getServletPath();
+
+        // SOLO omitir el filtro para el login y recuperación (endpoints públicos)
+        if (path.equals("/api/auth/authenticate") || path.equals("/api/auth/recover-password")) {
             filterChain.doFilter(request, response);
             return;
         }
-        
-        final String jwt;
+
+        String jwt = null;
         final String username;
 
-        // Extraer JWT de la cookie en lugar del header Authorization
+        // 1. Intentar extraer JWT de la cookie (Para tu Frontend en React)
         jwt = getCookieValue(request, "jwt");
 
+        // 2. Si no hay cookie, intentar extraer del Header (Para tu testing en Postman)
+        if (jwt == null) {
+            final String authHeader = request.getHeader("Authorization");
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                jwt = authHeader.substring(7);
+            }
+        }
+
+        // Si no se encontró el token de ninguna forma, continuar (dará 403 si la ruta requiere auth)
         if (jwt == null) {
             filterChain.doFilter(request, response);
             return;
