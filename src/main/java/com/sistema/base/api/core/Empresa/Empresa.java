@@ -24,6 +24,12 @@ public class Empresa {
     @Column(nullable = false)
     private String razonSocial;
 
+    private String nombreComercial;
+
+    private String departamento;
+    private String provincia;
+    private String distrito;
+
     private String direccion;
     private String telefono;
     private String email;
