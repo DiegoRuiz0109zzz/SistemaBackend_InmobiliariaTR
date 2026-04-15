@@ -51,6 +51,7 @@ public class SecurityConfig {
 		CorsConfiguration configuration = new CorsConfiguration();
 		configuration.setAllowedOrigins(Arrays.asList(
 				"http://localhost:3000",
+				"http://161.132.47.150",
 				"http://inmobiliariaterranort.net.pe",
 				"http://www.inmobiliariaterranort.net.pe",
 				"https://inmobiliariaterranort.net.pe",
