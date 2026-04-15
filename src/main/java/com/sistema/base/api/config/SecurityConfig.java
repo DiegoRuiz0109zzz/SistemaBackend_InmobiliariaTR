@@ -49,7 +49,13 @@ public class SecurityConfig {
 	@Bean
 	public CorsConfigurationSource corsConfigurationSource() {
 		CorsConfiguration configuration = new CorsConfiguration();
-		configuration.setAllowedOrigins(List.of("http://localhost:3000","http://161.132.47.150"));
+		configuration.setAllowedOrigins(Arrays.asList(
+				"http://localhost:3000",
+				"http://inmobiliariaterranort.net.pe",
+				"http://www.inmobiliariaterranort.net.pe",
+				"https://inmobiliariaterranort.net.pe",
+				"https://www.inmobiliariaterranort.net.pe"
+		));
 		configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"));
 		configuration.setAllowedHeaders(List.of("*"));
 		configuration.setAllowCredentials(true);
