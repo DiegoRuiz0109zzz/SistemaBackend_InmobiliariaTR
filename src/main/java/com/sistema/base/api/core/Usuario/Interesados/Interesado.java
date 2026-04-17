@@ -1,4 +1,4 @@
-package com.sistema.base.api.core.Vendedores;
+package com.sistema.base.api.core.Usuario.Interesados;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -11,15 +11,12 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "vendedores")
-public class Vendedor {
+@Table(name = "interesados")
+public class Interesado {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @Column(unique = true, nullable = false, length = 15)
-    private String numeroDocumento;
 
     @Column(nullable = false)
     private String nombres;
@@ -27,6 +24,10 @@ public class Vendedor {
     private String apellidos;
     private String telefono;
     private String email;
+
+    // Podrías añadir campos específicos como:
+    // private String proyectoDeInteres;
+    // private String estadoContacto; // ej: "Pendiente", "Contactado"
 
     @Builder.Default
     private boolean enabled = true;

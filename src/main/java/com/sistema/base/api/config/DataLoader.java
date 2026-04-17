@@ -14,6 +14,10 @@ import com.sistema.base.api.repository.ProfileRepository;
 import com.sistema.base.api.repository.ThemeRepository;
 import com.sistema.base.api.repository.UserRepository;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 @Configuration
 public class DataLoader {
 
@@ -38,37 +42,54 @@ public class DataLoader {
     @Bean
     CommandLineRunner initDatabase() {
         return args -> {
-            // 1. Crear Permisos de Gestión
-            Permission accesoBasico = createPermissionIfNotFound("ACCESO_BASICO");
-            Permission gestionUsuarios = createPermissionIfNotFound("GESTION_USUARIOS");
-            Permission gestionRoles = createPermissionIfNotFound("GESTION_ROLES");
-            Permission gestionJerarquia = createPermissionIfNotFound("GESTION_JERARQUIA");
+
+            // 1. Definir y Crear todos los permisos del sistema
+            List<String> nombresPermisos = Arrays.asList(
+                    "ACCESO_BASICO", "GESTION_USUARIOS", "GESTION_ROLES", "GESTION_JERARQUIA",
+                    "CREAR_EMPRESA", "EDITAR_EMPRESA", "ELIMINAR_EMPRESA",
+                    "CREAR_CLIENTE", "EDITAR_CLIENTE", "ELIMINAR_CLIENTE",
+                    "CREAR_INTERESADO", "EDITAR_INTERESADO", "ELIMINAR_INTERESADO",
+                    "CREAR_URBANIZACION", "EDITAR_URBANIZACION", "ELIMINAR_URBANIZACION",
+                    "CREAR_ETAPA", "EDITAR_ETAPA", "ELIMINAR_ETAPA",
+                    "CREAR_MANZANA", "EDITAR_MANZANA", "ELIMINAR_MANZANA",
+                    "CREAR_LOTE", "EDITAR_LOTE", "ELIMINAR_LOTE",
+                    "CREAR_VENDEDOR", "EDITAR_VENDEDOR", "ELIMINAR_VENDEDOR"
+            );
+
+            List<Permission> todosLosPermisos = new ArrayList<>();
+            for (String nombre : nombresPermisos) {
+                todosLosPermisos.add(createPermissionIfNotFound(nombre));
+            }
+
+            // Permiso básico individual para los roles menores
+            Permission accesoBasico = todosLosPermisos.get(0);
 
             // 2. Crear Perfiles Corporativos (Terranort)
 
-            // SUPER_ADMINISTRADOR - Máxima jerarquía técnica
+            // SUPER_ADMINISTRADOR - Máxima jerarquía con TODOS los permisos
             Profile superAdmin = profileRepository.findByName("SUPER_ADMINISTRADOR")
                     .orElseGet(() -> {
                         Profile p = new Profile();
                         p.setName("SUPER_ADMINISTRADOR");
                         p.setHierarchyLevel(100);
-                        p.getPermissions().add(accesoBasico);
-                        p.getPermissions().add(gestionUsuarios);
-                        p.getPermissions().add(gestionRoles);
-                        p.getPermissions().add(gestionJerarquia);
-                        return profileRepository.save(p);
+                        return p;
                     });
+            // Limpiamos y reasignamos para asegurar que tenga los nuevos si se agregaron después
+            superAdmin.getPermissions().clear();
+            superAdmin.getPermissions().addAll(todosLosPermisos);
+            profileRepository.save(superAdmin);
 
-            // GERENTE GENERAL - Acceso total al negocio
-            if (profileRepository.findByName("GERENTE_GENERAL").isEmpty()) {
-                Profile p = new Profile();
-                p.setName("GERENTE_GENERAL");
-                p.setHierarchyLevel(95);
-                p.getPermissions().add(accesoBasico);
-                p.getPermissions().add(gestionUsuarios);
-                p.getPermissions().add(gestionRoles);
-                profileRepository.save(p);
-            }
+            // GERENTE GENERAL - Acceso total al negocio con TODOS los permisos
+            Profile gerenteGeneral = profileRepository.findByName("GERENTE_GENERAL")
+                    .orElseGet(() -> {
+                        Profile p = new Profile();
+                        p.setName("GERENTE_GENERAL");
+                        p.setHierarchyLevel(95);
+                        return p;
+                    });
+            gerenteGeneral.getPermissions().clear();
+            gerenteGeneral.getPermissions().addAll(todosLosPermisos);
+            profileRepository.save(gerenteGeneral);
 
             // Roles con permisos básicos iniciales
             createProfileIfNotFound("JEFE_ADMINISTRACION", 90, accesoBasico);
@@ -78,7 +99,9 @@ public class DataLoader {
             createProfileIfNotFound("ADMINISTRADORA", 75, accesoBasico);
             createProfileIfNotFound("ASISTENTE_ADMINISTRATIVO", 70, accesoBasico);
 
-            // 3. Crear Usuario Inicial (admin / admin)
+            // 3. Crear Usuarios Iniciales
+
+            // Usuario admin
             if (userRepository.findByUsername("admin").isEmpty()) {
                 User adminUser = User.builder()
                         .username("admin")
@@ -87,18 +110,29 @@ public class DataLoader {
                         .apellidos("Terranort")
                         .email("admin@terranort.pe")
                         .telefono("999999999")
-                        .docIdentidad("00000000") // Valor ficticio para cumplir el nullable=false
+                        .docIdentidad("00000000")
                         .profile(superAdmin)
                         .build();
-
-                // Nota: Si aún no agregas el campo 'enabled' en User.java,
-                // no llames a .enabled(true) aquí para evitar errores de compilación.
-
                 userRepository.save(adminUser);
-                System.out.println(">>> CONFIGURACIÓN INICIAL: Usuario 'admin' creado con contraseña 'admin'");
             }
 
-            // 4. Temas (Manteniendo tus configuraciones)
+            // Usuario diego (Gerente General)
+            if (userRepository.findByUsername("diego").isEmpty()) {
+                User diegoUser = User.builder()
+                        .username("diego")
+                        .password(passwordEncoder.encode("diego123"))
+                        .nombres("Diego")
+                        .apellidos("Ruiz")
+                        .email("diego.ruiz@terranort.pe")
+                        .telefono("987654321")
+                        .docIdentidad("12345678")
+                        .profile(gerenteGeneral)
+                        .build();
+                userRepository.save(diegoUser);
+                System.out.println(">>> CONFIGURACIÓN INICIAL: Usuario 'diego' creado como GERENTE GENERAL");
+            }
+
+            // 4. Temas
             createThemeIfNotFound("base", "Clásico", "Tema azul profesional", "#357ABD", "#f4f7fa", "#357ABD", "#ffffff", "#ffffff", "#212529", "#6c757d", false, true);
             createThemeIfNotFound("dark", "Oscuro", "Modo oscuro nativo", "#5c6bc0", "#1a1a2e", "#16213e", "#e8e8e8", "#1f1f38", "#e8e8e8", "#a0a0a0", true, true);
         };
