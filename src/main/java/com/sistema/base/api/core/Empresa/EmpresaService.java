@@ -36,10 +36,15 @@ public class EmpresaService {
         Empresa empresa = obtenerPorId(id);
 
         empresa.setRazonSocial(empresaRequest.getRazonSocial());
+        empresa.setNombreComercial(empresaRequest.getNombreComercial());
         empresa.setDireccion(empresaRequest.getDireccion());
         empresa.setTelefono(empresaRequest.getTelefono());
         empresa.setEmail(empresaRequest.getEmail());
-        empresa.setWeb(empresaRequest.getWeb());
+        empresa.setDepartamento(empresaRequest.getDepartamento());
+        empresa.setProvincia(empresaRequest.getProvincia());
+        empresa.setDistrito(empresaRequest.getDistrito());
+        empresa.setUbigeo(empresaRequest.getUbigeo());
+
         empresa.setEnabled(empresaRequest.isEnabled());
 
         return empresaRepository.save(empresa);

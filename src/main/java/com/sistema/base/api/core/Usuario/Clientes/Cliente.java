@@ -1,4 +1,4 @@
-package com.sistema.base.api.core.Empresa;
+package com.sistema.base.api.core.Usuario.Clientes;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -6,25 +6,29 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
+
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "empresa")
-public class Empresa {
+@Table(name = "clientes")
+public class Cliente {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true, nullable = false, length = 11)
-    private String ruc;
+    @Column(unique = true, nullable = false)
+    private String numeroDocumento; // DNI, CE o RUC
 
     @Column(nullable = false)
-    private String razonSocial;
-
-    private String nombreComercial;
+    private String nombres;
+    @Column(nullable = false)
+    private String apellidos;
+    @Column(nullable = false)
+    private LocalDate fechaIngreso;
 
     private String departamento;
     private String provincia;
@@ -35,6 +39,10 @@ public class Empresa {
     private String telefono;
     private String email;
 
+    @PrePersist
+    protected void onCreate() {
+        fechaIngreso = LocalDate.now();
+    }
 
     @Builder.Default
     private boolean enabled = true;
