@@ -43,7 +43,7 @@ public class DataLoader {
     CommandLineRunner initDatabase() {
         return args -> {
 
-            // 1. Definir y Crear todos los permisos del sistema
+            // 1. Definir y Crear todos los permisos del sistema (ACTUALIZADO CON FINANCIAMIENTO)
             List<String> nombresPermisos = Arrays.asList(
                     "ACCESO_BASICO", "GESTION_USUARIOS", "GESTION_ROLES", "GESTION_JERARQUIA",
                     "CREAR_EMPRESA", "EDITAR_EMPRESA", "ELIMINAR_EMPRESA",
@@ -53,7 +53,12 @@ public class DataLoader {
                     "CREAR_ETAPA", "EDITAR_ETAPA", "ELIMINAR_ETAPA",
                     "CREAR_MANZANA", "EDITAR_MANZANA", "ELIMINAR_MANZANA",
                     "CREAR_LOTE", "EDITAR_LOTE", "ELIMINAR_LOTE",
-                    "CREAR_VENDEDOR", "EDITAR_VENDEDOR", "ELIMINAR_VENDEDOR"
+                    "CREAR_VENDEDOR", "EDITAR_VENDEDOR", "ELIMINAR_VENDEDOR",
+
+                    // -- NUEVOS PERMISOS FINANCIEROS --
+                    "CREAR_CONTRATO", "EDITAR_CONTRATO", "ELIMINAR_CONTRATO",
+                    "CREAR_CUOTA", "EDITAR_CUOTA", "ELIMINAR_CUOTA",
+                    "CREAR_PAGO", "EDITAR_PAGO", "ELIMINAR_PAGO"
             );
 
             List<Permission> todosLosPermisos = new ArrayList<>();
