@@ -39,6 +39,9 @@ public class Cliente {
     private String telefono;
     private String email;
 
+    @Column(nullable = false, length = 20)
+    private String tipoDocumento;
+
     @PrePersist
     protected void onCreate() {
         fechaIngreso = LocalDate.now();

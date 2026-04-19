@@ -31,13 +31,15 @@ public class VendedorService {
     }
 
     @Transactional
-    public Vendedor actualizar(Long id, Vendedor request) {
+    public Vendedor actualizar(Long id, Vendedor vendedorRequest) {
         Vendedor vendedor = obtenerPorId(id);
-        vendedor.setNombres(request.getNombres());
-        vendedor.setApellidos(request.getApellidos());
-        vendedor.setTelefono(request.getTelefono());
-        vendedor.setEmail(request.getEmail());
-        vendedor.setEnabled(request.isEnabled());
+
+        vendedor.setTipoDocumento(vendedorRequest.getTipoDocumento());
+        vendedor.setNombres(vendedorRequest.getNombres());
+        vendedor.setApellidos(vendedorRequest.getApellidos());
+        vendedor.setTelefono(vendedorRequest.getTelefono());
+        vendedor.setEmail(vendedorRequest.getEmail());
+        vendedor.setEnabled(vendedorRequest.isEnabled());
         return vendedorRepository.save(vendedor);
     }
 

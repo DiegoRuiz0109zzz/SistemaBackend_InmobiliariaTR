@@ -28,6 +28,9 @@ public class Vendedor {
     private String telefono;
     private String email;
 
+    @Column(nullable = false, length = 20)
+    private String tipoDocumento;
+
     @Builder.Default
     private boolean enabled = true;
 }

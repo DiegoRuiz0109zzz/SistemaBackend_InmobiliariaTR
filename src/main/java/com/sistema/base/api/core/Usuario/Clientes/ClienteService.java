@@ -35,6 +35,7 @@ public class ClienteService {
     public Cliente actualizar(Long id, Cliente clienteRequest) {
         Cliente cliente = obtenerPorId(id);
 
+        cliente.setTipoDocumento(clienteRequest.getTipoDocumento());
         cliente.setNombres(clienteRequest.getNombres());
         cliente.setApellidos(clienteRequest.getApellidos());
         cliente.setDireccion(clienteRequest.getDireccion());
