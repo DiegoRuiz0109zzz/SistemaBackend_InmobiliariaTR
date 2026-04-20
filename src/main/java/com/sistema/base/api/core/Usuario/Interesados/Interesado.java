@@ -25,6 +25,12 @@ public class Interesado {
     private String telefono;
     private String email;
 
+    @Column(nullable = false, length = 20)
+    private String tipoDocumento;
+
+    @Column(unique = true, nullable = false)
+    private String numeroDocumento;
+
     // Podrías añadir campos específicos como:
     // private String proyectoDeInteres;
     // private String estadoContacto; // ej: "Pendiente", "Contactado"

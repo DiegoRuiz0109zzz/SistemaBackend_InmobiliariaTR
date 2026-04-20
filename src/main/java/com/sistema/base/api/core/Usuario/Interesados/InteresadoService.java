@@ -3,7 +3,6 @@ package com.sistema.base.api.core.Usuario.Interesados;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.util.List;
 
 @Service
@@ -25,9 +24,12 @@ public class InteresadoService {
 
     @Transactional
     public Interesado guardar(Interesado interesado) {
-        // Validación opcional: Evitar registrar el mismo teléfono dos veces
         if (interesado.getTelefono() != null && interesadoRepository.existsByTelefono(interesado.getTelefono())) {
             throw new RuntimeException("Este número de teléfono ya está registrado como interesado.");
+        }
+        if (interesado.getNumeroDocumento() != null && !interesado.getNumeroDocumento().isEmpty()
+                && interesadoRepository.existsByNumeroDocumento(interesado.getNumeroDocumento())) {
+            throw new RuntimeException("El número de documento ya está registrado en otro interesado.");
         }
         return interesadoRepository.save(interesado);
     }
@@ -36,6 +38,8 @@ public class InteresadoService {
     public Interesado actualizar(Long id, Interesado interesadoRequest) {
         Interesado interesado = obtenerPorId(id);
 
+        interesado.setTipoDocumento(interesadoRequest.getTipoDocumento());
+        interesado.setNumeroDocumento(interesadoRequest.getNumeroDocumento());
         interesado.setNombres(interesadoRequest.getNombres());
         interesado.setApellidos(interesadoRequest.getApellidos());
         interesado.setTelefono(interesadoRequest.getTelefono());
@@ -48,8 +52,7 @@ public class InteresadoService {
     @Transactional
     public void eliminar(Long id) {
         Interesado interesado = obtenerPorId(id);
-        // En lugar de interesadoRepository.delete(interesado); hacemos esto:
-        interesado.setEnabled(false); // Cambia el estado a 0
+        interesado.setEnabled(false);
         interesadoRepository.save(interesado);
     }
 }

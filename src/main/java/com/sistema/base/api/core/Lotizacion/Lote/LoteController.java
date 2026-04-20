@@ -38,6 +38,22 @@ public class LoteController {
         return ResponseEntity.ok(loteService.actualizar(id, lote));
     }
 
+    @GetMapping("/calcular-costo")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> calcularCosto(
+            @RequestParam Double area,
+            @RequestParam Double precioMetroCuadrado) {
+
+        Double precioCosto = loteService.calcularCostoBase(area, precioMetroCuadrado);
+
+        // Devolvemos un JSON simple con la respuesta
+        return ResponseEntity.ok(java.util.Map.of(
+                "area", area,
+                "precioMetroCuadrado", precioMetroCuadrado,
+                "precioCosto", precioCosto
+        ));
+    }
+
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('ELIMINAR_LOTE')")
     public ResponseEntity<Void> eliminar(@PathVariable Long id) {

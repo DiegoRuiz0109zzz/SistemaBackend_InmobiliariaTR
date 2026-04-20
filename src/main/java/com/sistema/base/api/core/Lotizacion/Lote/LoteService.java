@@ -46,12 +46,22 @@ public class LoteService {
 
         lote.setNumero(request.getNumero());
         lote.setArea(request.getArea());
-        lote.setPrecio(request.getPrecio());
+        lote.setPrecioMetroCuadrado(request.getPrecioMetroCuadrado());
+        lote.setPrecioCosto(request.getPrecioCosto());
+        lote.setPrecioVenta(request.getPrecioVenta());
         lote.setEstadoVenta(request.getEstadoVenta());
         lote.setManzana(manzana);
         lote.setEnabled(request.isEnabled());
 
         return loteRepository.save(lote);
+    }
+
+    public Double calcularCostoBase(Double area, Double precioMetroCuadrado) {
+        if (area == null || precioMetroCuadrado == null || area <= 0 || precioMetroCuadrado <= 0) {
+            return 0.0;
+        }
+        // Redondeamos a 2 decimales por ser moneda
+        return Math.round((area * precioMetroCuadrado) * 100.0) / 100.0;
     }
 
     @Transactional

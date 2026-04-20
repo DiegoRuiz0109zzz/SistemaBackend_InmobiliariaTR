@@ -12,15 +12,25 @@ import lombok.*;
 @Entity
 @Table(name = "lotes")
 public class Lote {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(nullable = false)
-    private String numero; // Ej: "01", "02"
+    private String numero;
 
+    // Nuevas variables para el cálculo
+    @Column(nullable = false)
     private Double area;
-    private Double precio;
 
+    @Column(nullable = false)
+    private Double precioMetroCuadrado;
+
+    @Column(nullable = false)
+    private Double precioCosto;
+
+    @Column(nullable = false)
+    private Double precioVenta;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
