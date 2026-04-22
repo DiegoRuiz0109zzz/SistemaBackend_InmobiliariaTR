@@ -8,5 +8,11 @@ public class SimulacionRequest {
     private Double precioTotal;
     private Double montoInicial;
     private Integer cantidadCuotas;
-    private LocalDate fechaInicioPago; // Cuándo paga la primera cuota
+
+    // El cliente elige la fecha, el día de esta fecha fijará los pagos mensuales
+    private LocalDate fechaInicioPago;
+
+    // --- NUEVO: Simulación Flexible ---
+    private Integer cuotasEspeciales;  // Ej: 3
+    private Double montoCuotaEspecial; // Ej: 1000.0
 }

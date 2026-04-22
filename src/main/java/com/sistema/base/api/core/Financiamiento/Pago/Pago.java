@@ -35,6 +35,12 @@ public class Pago {
     @Column(name = "fecha_pago", updatable = false)
     private LocalDateTime fechaPago;
 
+    @Column(length = 50, nullable = false)
+    private String metodoPago; // Ej: "Transferencia BCP", "Yape / Plin", "Efectivo"
+
+    @Column(length = 100)
+    private String numeroOperacion;
+
     @Builder.Default
     private boolean enabled = true;
 
