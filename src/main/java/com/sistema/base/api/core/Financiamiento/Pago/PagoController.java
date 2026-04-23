@@ -1,6 +1,7 @@
 package com.sistema.base.api.core.Financiamiento.Pago;
 
 import com.sistema.base.api.core.Financiamiento.Pago.dtos.PagoRequest;
+import com.sistema.base.api.core.Financiamiento.Pago.dtos.ProcesarPagoRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -31,5 +32,20 @@ public class PagoController {
     public ResponseEntity<Void> anular(@PathVariable Long id) {
         pagoService.anularPago(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/{id}/procesar")
+    @PreAuthorize("hasAuthority('PROCESAR_PAGO')") // O el permiso que use tu rol de Caja
+    public ResponseEntity<Pago> procesarPendiente(
+            @PathVariable Long id,
+            @RequestBody ProcesarPagoRequest request) {
+
+        Pago pagoProcesado = pagoService.procesarPagoPendiente(
+                id,
+                request.getMetodoPago(),
+                request.getNumeroOperacion(),
+                request.getFotoVoucherUrl()
+        );
+        return ResponseEntity.ok(pagoProcesado);
     }
 }

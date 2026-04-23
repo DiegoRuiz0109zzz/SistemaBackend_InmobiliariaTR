@@ -27,25 +27,30 @@ public class Pago {
     private Cuota cuota;
 
     @Column(nullable = false)
-    private Double montoAbonado; // Ej: 200.0
+    private Double montoAbonado;
 
     @Column(length = 500)
-    private String fotoVoucherUrl; // Ruta donde se guarda la foto
+    private String fotoVoucherUrl;
 
-    @Column(name = "fecha_pago", updatable = false)
-    private LocalDateTime fechaPago;
-
-    @Column(length = 50, nullable = false)
-    private String metodoPago; // Ej: "Transferencia BCP", "Yape / Plin", "Efectivo"
+    @Column(length = 50)
+    private String metodoPago;
 
     @Column(length = 100)
     private String numeroOperacion;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private EstadoPago estado = EstadoPago.PROCESADO;
+
+    @Column(name = "fecha_pago", updatable = false)
+    private LocalDateTime fechaPago;
 
     @Builder.Default
     private boolean enabled = true;
 
     @PrePersist
     protected void onCreate() {
-        fechaPago = LocalDateTime.now(); // Graba la hora exacta del registro
+        fechaPago = LocalDateTime.now();
     }
 }

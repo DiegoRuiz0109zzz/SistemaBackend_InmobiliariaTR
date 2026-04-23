@@ -80,4 +80,38 @@ public class PagoService {
         pago.setEnabled(false);
         pagoRepository.save(pago);
     }
+
+    @Transactional
+    public Pago procesarPagoPendiente(Long pagoId, String metodoPago, String numeroOperacion, String fotoVoucherUrl) {
+        Pago pago = pagoRepository.findById(pagoId)
+                .orElseThrow(() -> new RuntimeException("Pago no encontrado."));
+
+        if (pago.getEstado() == EstadoPago.PROCESADO) {
+            throw new RuntimeException("Este pago ya fue procesado y validado anteriormente.");
+        }
+
+        Cuota cuota = pago.getCuota();
+
+        // 1. Actualizamos los datos reales del pago
+        pago.setMetodoPago(metodoPago);
+        pago.setNumeroOperacion(numeroOperacion);
+        pago.setFotoVoucherUrl(fotoVoucherUrl);
+        pago.setEstado(EstadoPago.PROCESADO);
+
+        // 2. Ahora sí le sumamos el dinero a la Cuota (porque ya entró a caja)
+        double nuevoMontoPagado = cuota.getMontoPagado() + pago.getMontoAbonado();
+        cuota.setMontoPagado(nuevoMontoPagado);
+
+        // 3. Ajustamos el estado de la cuota
+        if (nuevoMontoPagado >= cuota.getMontoTotal()) {
+            cuota.setEstado(EstadoCuota.PAGADO_TOTAL);
+        } else {
+            cuota.setEstado(EstadoCuota.PAGADO_PARCIAL);
+        }
+
+        cuotaRepository.save(cuota);
+        return pagoRepository.save(pago);
+    }
+
+
 }
