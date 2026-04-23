@@ -1,77 +1,63 @@
-package com.sistema.base.api.core.Financiamiento.Contrato;
+package com.sistema.base.api.core.Financiamiento.Cotizacion;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.sistema.base.api.core.Lotizacion.Lote.Lote;
-import com.sistema.base.api.core.Usuario.Clientes.Cliente;
+import com.sistema.base.api.core.Usuario.Interesados.Interesado;
 import com.sistema.base.api.core.Vendedores.Vendedor;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import java.time.LocalDateTime;
+import lombok.*;
+
+import java.time.LocalDate;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "contratos")
-public class Contrato {
-
+@Table(name = "cotizaciones")
+public class Cotizacion {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Relaciones
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "lote_id", nullable = false)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Lote lote;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "cliente_id", nullable = false)
+    @JoinColumn(name = "interesado_id", nullable = false)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
-    private Cliente cliente;
+    private Interesado interesado;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "vendedor_id", nullable = false)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Vendedor vendedor;
 
-    // Matemática del Financiamiento
     @Column(nullable = false)
     private Double precioTotal;
 
     @Column(nullable = false)
-    private Double montoInicial;
-
-    @Column(nullable = false)
-    private Double saldoFinanciar;
+    private Double montoInicialAcordado;
 
     @Column(nullable = false)
     private Integer cantidadCuotas;
 
-    @Column(length = 1000)
-    private String descripcion; // Se autogenerará
+    private Integer cuotasEspeciales;
+    private Double montoCuotaEspecial;
 
-    @Column(length = 1000)
-    private String observacion; // Escrita por el vendedor
+    @Column(nullable = false)
+    private LocalDate fechaCotizacion;
 
-    // Fechas
-    @Column(name = "fecha_contrato")
-    private LocalDateTime fechaContrato;
+    @Column(nullable = false)
+    private LocalDate fechaValidez;
 
-    @Column(name = "fecha_registro")
-    private LocalDateTime fechaRegistro;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private EstadoCotizacion estado = EstadoCotizacion.VIGENTE;
 
     @Builder.Default
     private boolean enabled = true;
-
-    @PrePersist
-    protected void onCreate() {
-        fechaRegistro = LocalDateTime.now();
-    }
-
-
 }

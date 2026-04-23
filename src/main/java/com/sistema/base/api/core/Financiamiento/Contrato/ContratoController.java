@@ -1,5 +1,6 @@
 package com.sistema.base.api.core.Financiamiento.Contrato;
 
+import com.sistema.base.api.core.Financiamiento.Contrato.dtos.ContratoRequest;
 import com.sistema.base.api.core.Financiamiento.Contrato.dtos.CuotaPreview;
 import com.sistema.base.api.core.Financiamiento.Contrato.dtos.SimulacionRequest;
 import lombok.RequiredArgsConstructor;
@@ -40,11 +41,7 @@ public class ContratoController {
     // Endpoint 2: Guardado real del Contrato y sus Cuotas
     @PostMapping("/")
     @PreAuthorize("hasAuthority('CREAR_CONTRATO')")
-    public ResponseEntity<Contrato> crear(
-            @RequestBody Contrato contrato,
-            @RequestParam String fechaInicioPago) { // Lo recibimos por parámetro en la URL
-
-        LocalDate fechaInicio = LocalDate.parse(fechaInicioPago);
-        return ResponseEntity.ok(contratoService.generarContrato(contrato, fechaInicio));
+    public ResponseEntity<Contrato> crear(@RequestBody ContratoRequest request) {
+        return ResponseEntity.ok(contratoService.generarContrato(request));
     }
 }

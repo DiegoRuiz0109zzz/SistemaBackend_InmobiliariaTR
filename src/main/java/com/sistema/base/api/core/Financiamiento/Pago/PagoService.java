@@ -3,6 +3,7 @@ package com.sistema.base.api.core.Financiamiento.Pago;
 import com.sistema.base.api.core.Financiamiento.Cuota.Cuota;
 import com.sistema.base.api.core.Financiamiento.Cuota.CuotaRepository;
 import com.sistema.base.api.core.Financiamiento.Cuota.EstadoCuota;
+import com.sistema.base.api.core.Financiamiento.Pago.dtos.PagoRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,34 +22,39 @@ public class PagoService {
     }
 
     @Transactional
-    public Pago registrarPago(Pago pago) {
+    public Pago registrarPago(PagoRequest request) {
         // 1. Buscar la cuota a la que se le está haciendo el abono
-        Cuota cuota = cuotaRepository.findById(pago.getCuota().getId())
+        Cuota cuota = cuotaRepository.findById(request.getCuotaId())
                 .orElseThrow(() -> new RuntimeException("La cuota no existe."));
 
         // 2. Validar que no pague más de lo que debe
         double saldoPendiente = cuota.getMontoTotal() - cuota.getMontoPagado();
-        if (pago.getMontoAbonado() > saldoPendiente) {
-            throw new RuntimeException("El monto a abonar (" + pago.getMontoAbonado() +
+        if (request.getMontoAbonado() > saldoPendiente) {
+            throw new RuntimeException("El monto a pagar (" + request.getMontoAbonado() +
                     ") supera el saldo pendiente de la cuota (" + saldoPendiente + ").");
         }
 
-        // 3. Sumar el pago al acumulado de la cuota
+        // 3. Construir el nuevo Pago con los datos completos de Caja
+        Pago pago = Pago.builder()
+                .cuota(cuota)
+                .montoAbonado(request.getMontoAbonado())
+                .metodoPago(request.getMetodoPago())
+                .numeroOperacion(request.getNumeroOperacion())
+                .fotoVoucherUrl(request.getFotoVoucherUrl())
+                .build();
+
+        // 4. Sumar el pago al acumulado de la cuota
         double nuevoMontoPagado = cuota.getMontoPagado() + pago.getMontoAbonado();
         cuota.setMontoPagado(nuevoMontoPagado);
 
-        // 4. Cambiar el estado automáticamente según el progreso
+        // 5. Cambiar el estado de la cuota inteligentemente
         if (nuevoMontoPagado >= cuota.getMontoTotal()) {
             cuota.setEstado(EstadoCuota.PAGADO_TOTAL);
         } else {
             cuota.setEstado(EstadoCuota.PAGADO_PARCIAL);
         }
 
-        // Guardar la cuota actualizada
         cuotaRepository.save(cuota);
-
-        // 5. Vincular y guardar el historial del pago
-        pago.setCuota(cuota);
         return pagoRepository.save(pago);
     }
 

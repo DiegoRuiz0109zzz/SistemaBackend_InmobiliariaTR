@@ -1,5 +1,6 @@
 package com.sistema.base.api.core.Financiamiento.Pago;
 
+import com.sistema.base.api.core.Financiamiento.Pago.dtos.PagoRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -20,9 +21,9 @@ public class PagoController {
     }
 
     @PostMapping("/")
-    @PreAuthorize("hasAuthority('CREAR_PAGO')") // Permiso para que el cajero registre dinero
-    public ResponseEntity<Pago> registrar(@RequestBody Pago pago) {
-        return ResponseEntity.ok(pagoService.registrarPago(pago));
+    @PreAuthorize("hasAuthority('CREAR_PAGO')")
+    public ResponseEntity<Pago> registrar(@RequestBody PagoRequest request) {
+        return ResponseEntity.ok(pagoService.registrarPago(request));
     }
 
     @DeleteMapping("/{id}")

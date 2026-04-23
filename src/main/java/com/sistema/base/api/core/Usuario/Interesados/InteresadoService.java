@@ -40,6 +40,7 @@ public class InteresadoService {
 
         interesado.setTipoDocumento(interesadoRequest.getTipoDocumento());
         interesado.setNumeroDocumento(interesadoRequest.getNumeroDocumento());
+        interesado.setFechaIngreso(interesadoRequest.getFechaIngreso());
         interesado.setNombres(interesadoRequest.getNombres());
         interesado.setApellidos(interesadoRequest.getApellidos());
         interesado.setTelefono(interesadoRequest.getTelefono());

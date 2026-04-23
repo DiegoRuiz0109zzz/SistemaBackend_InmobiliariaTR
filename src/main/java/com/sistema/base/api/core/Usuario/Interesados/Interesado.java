@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -30,6 +32,14 @@ public class Interesado {
 
     @Column(unique = true, nullable = false)
     private String numeroDocumento;
+
+    @Column(nullable = false)
+    private LocalDate fechaIngreso;
+
+    @PrePersist
+    protected void onCreate() {
+        fechaIngreso = LocalDate.now();
+    }
 
     // Podrías añadir campos específicos como:
     // private String proyectoDeInteres;
