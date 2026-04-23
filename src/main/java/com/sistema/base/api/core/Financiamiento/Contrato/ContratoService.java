@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
@@ -120,43 +121,37 @@ public class ContratoService {
                 .cantidadCuotas(req.getCantidadCuotas())
                 .descripcion(descBuilder.toString()) // Guardamos el texto generado
                 .observacion(req.getObservacion())   // Guardamos la nota del vendedor
+
+                // NUEVO: Guardamos la fecha legal del documento (o la de hoy por defecto)
+                .fechaContrato(req.getFechaContrato() != null ? req.getFechaContrato().atStartOfDay() : LocalDateTime.now())
+
                 .build();
         Contrato contratoGuardado = contratoRepository.save(contrato);
 
-        // 3. LÓGICA DE LA CUOTA 0 Y SEPARACIÓN MÁGICA
-        Double abonoInicial = (req.getAbonoInicialReal() != null) ? req.getAbonoInicialReal() : 0.0;
+        // 3. EVALUAR LA INTENCIÓN DE PAGO (PARA EL ESTADO DEL LOTE)
+        Double abonoInicialPrometido = (req.getAbonoInicialReal() != null) ? req.getAbonoInicialReal() : 0.0;
 
-        // Si el cliente dio igual o más de la inicial acordada, ya está pagada. Si no, es pago parcial.
-        EstadoCuota estadoCuota0 = (abonoInicial >= req.getMontoInicialAcordado()) ? EstadoCuota.PAGADO_TOTAL : EstadoCuota.PAGADO_PARCIAL;
+        // Si el cliente promete dar la inicial completa, el lote se asegura como VENDIDO.
+        // Si promete dar menos (o nada por ahora), se marca como SEPARADO.
+        if (abonoInicialPrometido >= req.getMontoInicialAcordado()) {
+            lote.setEstadoVenta(EstadoLote.VENDIDO);
+        } else {
+            lote.setEstadoVenta(EstadoLote.SEPARADO);
+        }
+        loteRepository.save(lote);
 
+        // 4. CREAR LA CUOTA 0 (DEUDA GENERADA, ESPERANDO A CAJA)
         Cuota cuota0 = Cuota.builder()
                 .contrato(contratoGuardado)
                 .numeroCuota(0)
                 .montoTotal(req.getMontoInicialAcordado())
-                .montoPagado(abonoInicial)
+                .montoPagado(0.0) // Nace en 0 porque Tesorería debe registrar el ingreso del dinero
                 .fechaVencimiento((req.getFechaLimiteInicial() != null) ? req.getFechaLimiteInicial() : LocalDate.now())
-                .estado(estadoCuota0)
+                .estado(EstadoCuota.PENDIENTE) // Nace pendiente de pago
                 .build();
-        cuota0 = cuotaRepository.save(cuota0);
+        cuotaRepository.save(cuota0);
 
-        // 4. REGISTRAR EL VOUCHER/PAGO DE HOY
-        if (abonoInicial > 0) {
-            Pago pago0 = Pago.builder()
-                    .cuota(cuota0)
-                    .montoAbonado(abonoInicial)
-                    .build();
-            pagoRepository.save(pago0);
-        }
-
-        // 5. DECISIÓN DEL ESTADO DEL LOTE
-        if (estadoCuota0 == EstadoCuota.PAGADO_TOTAL) {
-            lote.setEstadoVenta(EstadoLote.VENDIDO); // Completó la inicial, el lote es suyo
-        } else {
-            lote.setEstadoVenta(EstadoLote.SEPARADO); // Le falta plata, se queda en separado
-        }
-        loteRepository.save(lote);
-
-        // 6. GENERAR EL RESTO DEL CRONOGRAMA (Cuotas 1 a N)
+        // 5. GENERAR EL RESTO DEL CRONOGRAMA (Cuotas 1 a N)
         if (saldoFinanciar > 0 && req.getCantidadCuotas() > 0) {
             SimulacionRequest sim = new SimulacionRequest();
             sim.setPrecioTotal(req.getPrecioTotal());

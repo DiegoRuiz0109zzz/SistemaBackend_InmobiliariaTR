@@ -59,14 +59,19 @@ public class Contrato {
     private String observacion; // Escrita por el vendedor
 
     // Fechas
-    @Column(name = "fecha_contrato", updatable = false)
+    @Column(name = "fecha_contrato")
     private LocalDateTime fechaContrato;
+
+    @Column(name = "fecha_registro")
+    private LocalDateTime fechaRegistro;
 
     @Builder.Default
     private boolean enabled = true;
 
     @PrePersist
     protected void onCreate() {
-        fechaContrato = LocalDateTime.now();
+        fechaRegistro = LocalDateTime.now();
     }
+
+
 }
