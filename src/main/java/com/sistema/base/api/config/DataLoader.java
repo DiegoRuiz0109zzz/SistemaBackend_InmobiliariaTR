@@ -58,7 +58,8 @@ public class DataLoader {
                     // -- NUEVOS PERMISOS FINANCIEROS --
                     "CREAR_CONTRATO", "EDITAR_CONTRATO", "ELIMINAR_CONTRATO",
                     "CREAR_CUOTA", "EDITAR_CUOTA", "ELIMINAR_CUOTA",
-                    "CREAR_PAGO", "EDITAR_PAGO", "ELIMINAR_PAGO"
+                    "CREAR_PAGO", "EDITAR_PAGO", "ELIMINAR_PAGO",
+                    "CREAR_PAGO","PROCESAR_PAGO","ELIMINAR_PAGO"
             );
 
             List<Permission> todosLosPermisos = new ArrayList<>();
