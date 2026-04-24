@@ -36,6 +36,7 @@ public class SecurityConfig {
 								// Especificamos solo las rutas públicas exactas
 								.requestMatchers("/api/auth/authenticate", "/api/auth/recover-password").permitAll()
 								.requestMatchers("/uploads/**").permitAll()
+								.requestMatchers("/vouchers/**").permitAll()
 								.requestMatchers("/api/config/theme").permitAll()
 								// El resto, incluyendo /api/auth/register, requiere autenticación
 								.anyRequest().authenticated())

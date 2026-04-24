@@ -3,10 +3,13 @@ package com.sistema.base.api.core.Financiamiento.Pago;
 import com.sistema.base.api.core.Financiamiento.Cuota.Cuota;
 import com.sistema.base.api.core.Financiamiento.Cuota.CuotaRepository;
 import com.sistema.base.api.core.Financiamiento.Cuota.EstadoCuota;
-import com.sistema.base.api.core.Financiamiento.Pago.dtos.PagoRequest;
+import com.sistema.base.api.core.Usuario.Clientes.Cliente;
+import com.sistema.base.api.service.FileStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
 import java.util.List;
 
 @Service
@@ -15,39 +18,101 @@ public class PagoService {
 
     private final PagoRepository pagoRepository;
     private final CuotaRepository cuotaRepository;
+    private final FileStorageService fileStorageService;
 
     @Transactional(readOnly = true)
     public List<Pago> listarPorCuota(Long cuotaId) {
         return pagoRepository.findByCuotaIdAndEnabledTrue(cuotaId);
     }
 
+    // ✅ MÉTODO CORREGIDO: Sanitiza el nombre y usa guiones bajos
+    private String generarNombreVoucher(Cliente cliente, MultipartFile file) {
+        String dni = cliente.getNumeroDocumento();
+        String primerNombre = cliente.getNombres().trim().split("\\s+")[0].toUpperCase();
+        String primerApellido = cliente.getApellidos().trim().split("\\s+")[0].toUpperCase();
+
+        // Obtenemos el nombre original y reemplazamos ESPACIOS y signos raros por guiones bajos
+        String originalFilename = org.springframework.util.StringUtils.cleanPath(file.getOriginalFilename());
+        originalFilename = originalFilename.replaceAll("[\\s+]", "_");
+
+        // Formato final LIMPIO: 70820348_DIEGO_RUIZ_WhatsApp_Image_2026.jpeg
+        return dni + "_" + primerNombre + "_" + primerApellido + "_" + originalFilename;
+    }
+
     @Transactional
-    public Pago registrarPago(PagoRequest request) {
-        // 1. Buscar la cuota a la que se le está haciendo el abono
-        Cuota cuota = cuotaRepository.findById(request.getCuotaId())
+    public Pago registrarPago(Long cuotaId, Double montoAbonado, String metodoPago, String numeroOperacion, MultipartFile voucherFile) {
+        Cuota cuota = cuotaRepository.findById(cuotaId)
                 .orElseThrow(() -> new RuntimeException("La cuota no existe."));
 
-        // 2. Validar que no pague más de lo que debe
         double saldoPendiente = cuota.getMontoTotal() - cuota.getMontoPagado();
-        if (request.getMontoAbonado() > saldoPendiente) {
-            throw new RuntimeException("El monto a pagar (" + request.getMontoAbonado() +
-                    ") supera el saldo pendiente de la cuota (" + saldoPendiente + ").");
+        if (montoAbonado > saldoPendiente) {
+            throw new RuntimeException("El monto a pagar supera el saldo pendiente.");
         }
 
-        // 3. Construir el nuevo Pago con los datos completos de Caja
+        String fotoVoucherUrl = null;
+
+        if (voucherFile != null && !voucherFile.isEmpty()) {
+            Cliente cliente = cuota.getContrato().getCliente();
+            String customFileName = generarNombreVoucher(cliente, voucherFile);
+
+            // Guardamos el archivo y le agregamos el prefijo "uploads/" para heredar los permisos públicos
+            String savedPath = fileStorageService.storeFileWithCustomName(voucherFile, "vouchers", customFileName);
+            fotoVoucherUrl = "uploads/" + savedPath;
+        }
+
         Pago pago = Pago.builder()
                 .cuota(cuota)
-                .montoAbonado(request.getMontoAbonado())
-                .metodoPago(request.getMetodoPago())
-                .numeroOperacion(request.getNumeroOperacion())
-                .fotoVoucherUrl(request.getFotoVoucherUrl())
+                .montoAbonado(montoAbonado)
+                .metodoPago(metodoPago)
+                .numeroOperacion(numeroOperacion)
+                .fotoVoucherUrl(fotoVoucherUrl)
+                .estado(EstadoPago.PROCESADO)
                 .build();
 
-        // 4. Sumar el pago al acumulado de la cuota
         double nuevoMontoPagado = cuota.getMontoPagado() + pago.getMontoAbonado();
         cuota.setMontoPagado(nuevoMontoPagado);
 
-        // 5. Cambiar el estado de la cuota inteligentemente
+        if (nuevoMontoPagado >= cuota.getMontoTotal()) {
+            cuota.setEstado(EstadoCuota.PAGADO_TOTAL);
+        } else {
+            cuota.setEstado(EstadoCuota.PAGADO_PARCIAL);
+        }
+
+        cuotaRepository.save(cuota);
+        return pagoRepository.save(pago);
+    }
+
+    @Transactional
+    public Pago procesarPagoPendiente(Long pagoId, String metodoPago, String numeroOperacion, MultipartFile voucherFile) {
+        Pago pago = pagoRepository.findById(pagoId)
+                .orElseThrow(() -> new RuntimeException("Pago no encontrado."));
+
+        if (pago.getEstado() == EstadoPago.PROCESADO) {
+            throw new RuntimeException("Este pago ya fue procesado y validado.");
+        }
+
+        Cuota cuota = pago.getCuota();
+        String fotoVoucherUrl = null;
+
+        if (voucherFile != null && !voucherFile.isEmpty()) {
+            Cliente cliente = cuota.getContrato().getCliente();
+            String customFileName = generarNombreVoucher(cliente, voucherFile);
+
+            // Guardamos el archivo y le agregamos el prefijo "uploads/"
+            String savedPath = fileStorageService.storeFileWithCustomName(voucherFile, "vouchers", customFileName);
+            fotoVoucherUrl = "uploads/" + savedPath;
+        }
+
+        pago.setMetodoPago(metodoPago);
+        pago.setNumeroOperacion(numeroOperacion);
+        if (fotoVoucherUrl != null) {
+            pago.setFotoVoucherUrl(fotoVoucherUrl);
+        }
+        pago.setEstado(EstadoPago.PROCESADO);
+
+        double nuevoMontoPagado = cuota.getMontoPagado() + pago.getMontoAbonado();
+        cuota.setMontoPagado(nuevoMontoPagado);
+
         if (nuevoMontoPagado >= cuota.getMontoTotal()) {
             cuota.setEstado(EstadoCuota.PAGADO_TOTAL);
         } else {
@@ -64,11 +129,8 @@ public class PagoService {
                 .orElseThrow(() -> new RuntimeException("Pago no encontrado"));
 
         Cuota cuota = pago.getCuota();
-
-        // Reversar el monto en la cuota
         cuota.setMontoPagado(cuota.getMontoPagado() - pago.getMontoAbonado());
 
-        // Ajustar el estado si se anula
         if (cuota.getMontoPagado() <= 0) {
             cuota.setEstado(EstadoCuota.PENDIENTE);
         } else {
@@ -76,42 +138,7 @@ public class PagoService {
         }
         cuotaRepository.save(cuota);
 
-        // Borrado lógico del pago
         pago.setEnabled(false);
         pagoRepository.save(pago);
     }
-
-    @Transactional
-    public Pago procesarPagoPendiente(Long pagoId, String metodoPago, String numeroOperacion, String fotoVoucherUrl) {
-        Pago pago = pagoRepository.findById(pagoId)
-                .orElseThrow(() -> new RuntimeException("Pago no encontrado."));
-
-        if (pago.getEstado() == EstadoPago.PROCESADO) {
-            throw new RuntimeException("Este pago ya fue procesado y validado anteriormente.");
-        }
-
-        Cuota cuota = pago.getCuota();
-
-        // 1. Actualizamos los datos reales del pago
-        pago.setMetodoPago(metodoPago);
-        pago.setNumeroOperacion(numeroOperacion);
-        pago.setFotoVoucherUrl(fotoVoucherUrl);
-        pago.setEstado(EstadoPago.PROCESADO);
-
-        // 2. Ahora sí le sumamos el dinero a la Cuota (porque ya entró a caja)
-        double nuevoMontoPagado = cuota.getMontoPagado() + pago.getMontoAbonado();
-        cuota.setMontoPagado(nuevoMontoPagado);
-
-        // 3. Ajustamos el estado de la cuota
-        if (nuevoMontoPagado >= cuota.getMontoTotal()) {
-            cuota.setEstado(EstadoCuota.PAGADO_TOTAL);
-        } else {
-            cuota.setEstado(EstadoCuota.PAGADO_PARCIAL);
-        }
-
-        cuotaRepository.save(cuota);
-        return pagoRepository.save(pago);
-    }
-
-
 }
