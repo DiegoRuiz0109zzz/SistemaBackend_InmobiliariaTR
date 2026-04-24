@@ -163,5 +163,28 @@ public class FileStorageService {
         }
         return filename.substring(filename.lastIndexOf('.') + 1);
     }
+
+    public String storeFileWithCustomName(org.springframework.web.multipart.MultipartFile file, String subDirectory, String customFileName) {
+        try {
+            // 🔥 CAMBIO CLAVE: Forzamos la ruta base absoluta a "uploads"
+            // en lugar de usar this.fileStoragePath (que apunta a profile-images)
+            java.nio.file.Path basePath = java.nio.file.Paths.get("uploads").toAbsolutePath().normalize();
+            java.nio.file.Path targetLocation = basePath;
+
+            if (subDirectory != null && !subDirectory.isEmpty()) {
+                targetLocation = basePath.resolve(subDirectory);
+                // Crea la carpeta uploads/vouchers si no existe
+                java.nio.file.Files.createDirectories(targetLocation);
+            }
+
+            java.nio.file.Path targetPath = targetLocation.resolve(customFileName);
+            java.nio.file.Files.copy(file.getInputStream(), targetPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+
+            return (subDirectory != null && !subDirectory.isEmpty() ? subDirectory + "/" : "") + customFileName;
+        } catch (java.io.IOException ex) {
+            throw new RuntimeException("No se pudo guardar el archivo " + customFileName, ex);
+        }
+    }
+
 }
 

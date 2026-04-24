@@ -8,12 +8,15 @@ import com.sistema.base.api.core.Financiamiento.Contrato.dtos.SimulacionRequest;
 import com.sistema.base.api.core.Financiamiento.Cuota.Cuota;
 import com.sistema.base.api.core.Financiamiento.Cuota.CuotaRepository;
 import com.sistema.base.api.core.Financiamiento.Cuota.EstadoCuota;
+import com.sistema.base.api.core.Financiamiento.Pago.EstadoPago;
 import com.sistema.base.api.core.Financiamiento.Pago.Pago;
 import com.sistema.base.api.core.Financiamiento.Pago.PagoRepository;
 import com.sistema.base.api.core.Lotizacion.Lote.EstadoLote;
 import com.sistema.base.api.core.Lotizacion.Lote.Lote;
 import com.sistema.base.api.core.Lotizacion.Lote.LoteRepository;
+import com.sistema.base.api.core.Usuario.Clientes.Cliente;
 import com.sistema.base.api.core.Usuario.Clientes.ClienteRepository;
+import com.sistema.base.api.core.Vendedores.Vendedor;
 import com.sistema.base.api.core.Vendedores.VendedorRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -90,49 +93,48 @@ public class ContratoService {
     // 2. GUARDAR CONTRATO REAL Y GENERAR CUOTAS
     @Transactional
     public Contrato generarContrato(ContratoRequest req) {
-        Lote lote = loteRepository.findById(req.getLoteId()).orElseThrow();
+
+        Lote lote = loteRepository.findById(req.getLoteId())
+                .orElseThrow(() -> new RuntimeException("El lote con ID " + req.getLoteId() + " no existe."));
+
         if (lote.getEstadoVenta() == EstadoLote.VENDIDO) {
             throw new RuntimeException("Este lote ya se encuentra vendido.");
         }
 
+        Cliente cliente = clienteRepository.findById(req.getClienteId())
+                .orElseThrow(() -> new RuntimeException("El cliente con ID " + req.getClienteId() + " no existe."));
+
+        Vendedor vendedor = vendedorRepository.findById(req.getVendedorId())
+                .orElseThrow(() -> new RuntimeException("El vendedor con ID " + req.getVendedorId() + " no existe."));
+
         Double saldoFinanciar = req.getPrecioTotal() - req.getMontoInicialAcordado();
 
-        // 1. AUTOGENERAR LA DESCRIPCIÓN DEL CRONOGRAMA
         StringBuilder descBuilder = new StringBuilder();
         descBuilder.append("Cuota Inicial de S/ ").append(req.getMontoInicialAcordado()).append(". ");
-
         if (req.getCuotasEspeciales() != null && req.getCuotasEspeciales() > 0) {
-            int cuotasRestantes = req.getCantidadCuotas() - req.getCuotasEspeciales();
-            descBuilder.append("Fraccionado en ")
-                    .append(req.getCuotasEspeciales()).append(" cuotas de S/ ").append(req.getMontoCuotaEspecial())
-                    .append(" y ").append(cuotasRestantes).append(" cuotas con el saldo restante.");
+            descBuilder.append("Fraccionado en ").append(req.getCuotasEspeciales()).append(" cuotas de S/ ").append(req.getMontoCuotaEspecial())
+                    .append(" y ").append(req.getCantidadCuotas() - req.getCuotasEspeciales()).append(" cuotas con el saldo restante.");
         } else {
             descBuilder.append("Fraccionado en ").append(req.getCantidadCuotas()).append(" cuotas regulares.");
         }
 
-        // 2. CREAR EL CONTRATO PADRE
         Contrato contrato = Contrato.builder()
                 .lote(lote)
-                .cliente(clienteRepository.findById(req.getClienteId()).orElseThrow())
-                .vendedor(vendedorRepository.findById(req.getVendedorId()).orElseThrow())
+                .cliente(cliente)
+                .vendedor(vendedor)
                 .precioTotal(req.getPrecioTotal())
                 .montoInicial(req.getMontoInicialAcordado())
                 .saldoFinanciar(saldoFinanciar)
                 .cantidadCuotas(req.getCantidadCuotas())
-                .descripcion(descBuilder.toString()) // Guardamos el texto generado
-                .observacion(req.getObservacion())   // Guardamos la nota del vendedor
-
-                // NUEVO: Guardamos la fecha legal del documento (o la de hoy por defecto)
+                .descripcion(descBuilder.toString())
+                .observacion(req.getObservacion())
                 .fechaContrato(req.getFechaContrato() != null ? req.getFechaContrato().atStartOfDay() : LocalDateTime.now())
-
                 .build();
+
         Contrato contratoGuardado = contratoRepository.save(contrato);
 
-        // 3. EVALUAR LA INTENCIÓN DE PAGO (PARA EL ESTADO DEL LOTE)
+        // EVALUAR INTENCIÓN DE PAGO PARA EL LOTE
         Double abonoInicialPrometido = (req.getAbonoInicialReal() != null) ? req.getAbonoInicialReal() : 0.0;
-
-        // Si el cliente promete dar la inicial completa, el lote se asegura como VENDIDO.
-        // Si promete dar menos (o nada por ahora), se marca como SEPARADO.
         if (abonoInicialPrometido >= req.getMontoInicialAcordado()) {
             lote.setEstadoVenta(EstadoLote.VENDIDO);
         } else {
@@ -140,18 +142,29 @@ public class ContratoService {
         }
         loteRepository.save(lote);
 
-        // 4. CREAR LA CUOTA 0 (DEUDA GENERADA, ESPERANDO A CAJA)
+        // CREAR LA CUOTA 0
         Cuota cuota0 = Cuota.builder()
                 .contrato(contratoGuardado)
                 .numeroCuota(0)
                 .montoTotal(req.getMontoInicialAcordado())
-                .montoPagado(0.0) // Nace en 0 porque Tesorería debe registrar el ingreso del dinero
+                .montoPagado(0.0) // Nace en 0, esperando confirmación de caja
                 .fechaVencimiento((req.getFechaLimiteInicial() != null) ? req.getFechaLimiteInicial() : LocalDate.now())
-                .estado(EstadoCuota.PENDIENTE) // Nace pendiente de pago
+                .estado(EstadoCuota.PENDIENTE)
                 .build();
-        cuotaRepository.save(cuota0);
+        cuota0 = cuotaRepository.save(cuota0);
 
-        // 5. GENERAR EL RESTO DEL CRONOGRAMA (Cuotas 1 a N)
+        // ✅ NUEVA LÓGICA: GENERAR EL PAGO "POR VALIDAR"
+        if (abonoInicialPrometido > 0) {
+            Pago pagoPendiente = Pago.builder()
+                    .cuota(cuota0)
+                    .montoAbonado(abonoInicialPrometido)
+                    .estado(EstadoPago.POR_VALIDAR) // El escudo financiero
+                    .metodoPago("POR CONFIRMAR EN CAJA")
+                    .build();
+            pagoRepository.save(pagoPendiente);
+        }
+
+        // GENERAR EL RESTO DEL CRONOGRAMA
         if (saldoFinanciar > 0 && req.getCantidadCuotas() > 0) {
             SimulacionRequest sim = new SimulacionRequest();
             sim.setPrecioTotal(req.getPrecioTotal());
