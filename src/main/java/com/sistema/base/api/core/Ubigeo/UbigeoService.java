@@ -23,4 +23,9 @@ public class UbigeoService {
     public List<Ubigeo> getDistritos(String departamento, String provincia) {
         return ubigeoRepository.findDistritos(departamento, provincia);
     }
+
+    public Ubigeo getUbigeoPorId(String idUbigeo) {
+        return ubigeoRepository.findById(idUbigeo)
+                .orElseThrow(() -> new RuntimeException("Código de Ubigeo no encontrado: " + idUbigeo));
+    }
 }
