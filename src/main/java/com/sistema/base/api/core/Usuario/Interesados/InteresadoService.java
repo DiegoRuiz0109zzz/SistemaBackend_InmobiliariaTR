@@ -46,6 +46,10 @@ public class InteresadoService {
         interesado.setTelefono(interesadoRequest.getTelefono());
         interesado.setEmail(interesadoRequest.getEmail());
         interesado.setEnabled(interesadoRequest.isEnabled());
+        interesado.setDepartamento(interesadoRequest.getDepartamento());
+        interesado.setDistrito(interesadoRequest.getDistrito());
+        interesado.setProvincia(interesadoRequest.getProvincia());
+        interesado.setUbigeo(interesadoRequest.getUbigeo());
 
         return interesadoRepository.save(interesado);
     }

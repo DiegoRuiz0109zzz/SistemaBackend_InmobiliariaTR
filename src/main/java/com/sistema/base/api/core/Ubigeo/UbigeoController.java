@@ -37,4 +37,11 @@ public class UbigeoController {
             @PathVariable String provincia) {
         return ResponseEntity.ok(ubigeoService.getDistritos(departamento, provincia));
     }
+
+    @GetMapping("/{idUbigeo}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Ubigeo> obtenerPorId(@PathVariable String idUbigeo) {
+        return ResponseEntity.ok(ubigeoService.getUbigeoPorId(idUbigeo));
+    }
+
 }
