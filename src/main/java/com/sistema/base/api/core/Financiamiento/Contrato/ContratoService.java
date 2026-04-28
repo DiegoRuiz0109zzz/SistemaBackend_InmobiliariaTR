@@ -1,13 +1,14 @@
 package com.sistema.base.api.core.Financiamiento.Contrato;
 
-
-
 import com.sistema.base.api.core.Financiamiento.Contrato.dtos.ContratoRequest;
 import com.sistema.base.api.core.Financiamiento.Contrato.dtos.CuotaPreview;
 import com.sistema.base.api.core.Financiamiento.Contrato.dtos.SimulacionRequest;
+import com.sistema.base.api.core.Financiamiento.Cotizacion.Cotizacion;
+import com.sistema.base.api.core.Financiamiento.Cotizacion.CotizacionRepository;
 import com.sistema.base.api.core.Financiamiento.Cuota.Cuota;
 import com.sistema.base.api.core.Financiamiento.Cuota.CuotaRepository;
 import com.sistema.base.api.core.Financiamiento.Cuota.EstadoCuota;
+import com.sistema.base.api.core.Financiamiento.Cuota.TipoCuota;
 import com.sistema.base.api.core.Financiamiento.Pago.EstadoPago;
 import com.sistema.base.api.core.Financiamiento.Pago.Pago;
 import com.sistema.base.api.core.Financiamiento.Pago.PagoRepository;
@@ -39,7 +40,10 @@ public class ContratoService {
     private final VendedorRepository vendedorRepository;
     private final PagoRepository pagoRepository;
 
-    // 1. EL SIMULADOR (No guarda en base de datos, solo calcula)
+    // NUEVO: Inyectamos el repositorio de Cotizaciones
+    private final CotizacionRepository cotizacionRepository;
+
+    // 1. EL SIMULADOR (Intacto, exactamente tu lógica)
     public List<CuotaPreview> simularCronograma(SimulacionRequest request) {
         List<CuotaPreview> cronograma = new ArrayList<>();
         Double saldoFinanciar = request.getPrecioTotal() - request.getMontoInicial();
@@ -107,6 +111,12 @@ public class ContratoService {
         Vendedor vendedor = vendedorRepository.findById(req.getVendedorId())
                 .orElseThrow(() -> new RuntimeException("El vendedor con ID " + req.getVendedorId() + " no existe."));
 
+        // NUEVO: Buscar la cotización origen (si el frontend envía el ID)
+        Cotizacion cotizacion = null;
+        if (req.getCotizacionId() != null) {
+            cotizacion = cotizacionRepository.findById(req.getCotizacionId()).orElse(null);
+        }
+
         Double saldoFinanciar = req.getPrecioTotal() - req.getMontoInicialAcordado();
 
         StringBuilder descBuilder = new StringBuilder();
@@ -118,42 +128,54 @@ public class ContratoService {
             descBuilder.append("Fraccionado en ").append(req.getCantidadCuotas()).append(" cuotas regulares.");
         }
 
+        // EVALUAR INTENCIÓN DE PAGO Y ESTADOS
+        Double abonoInicialPrometido = (req.getAbonoInicialReal() != null) ? req.getAbonoInicialReal() : 0.0;
+
+        if (abonoInicialPrometido >= req.getMontoInicialAcordado()) {
+            lote.setEstadoVenta(EstadoLote.VENDIDO);
+        } else {
+            lote.setEstadoVenta(EstadoLote.RESERVADO);
+        }
+        loteRepository.save(lote);
+
+        // NUEVO: Determinar el Estado del Contrato
+        EstadoContrato estadoContratoReal = (abonoInicialPrometido >= req.getMontoInicialAcordado())
+                ? EstadoContrato.ACTIVO : EstadoContrato.SEPARADO;
+
         Contrato contrato = Contrato.builder()
                 .lote(lote)
                 .cliente(cliente)
                 .vendedor(vendedor)
+                .cotizacionOrigen(cotizacion) // NUEVO
                 .precioTotal(req.getPrecioTotal())
                 .montoInicial(req.getMontoInicialAcordado())
+                .montoAbonadoIncial(abonoInicialPrometido) // NUEVO
                 .saldoFinanciar(saldoFinanciar)
                 .cantidadCuotas(req.getCantidadCuotas())
                 .descripcion(descBuilder.toString())
                 .observacion(req.getObservacion())
+                .tipoInicial(req.getTipoInicial()) // NUEVO
+                .cuotasFlexibles(req.getCuotasFlexibles() != null ? req.getCuotasFlexibles() : false) // NUEVO
+                .fechaInicioCronograma(req.getFechaInicioPago()) // NUEVO
+                .estadoContrato(estadoContratoReal) // NUEVO
                 .fechaContrato(req.getFechaContrato() != null ? req.getFechaContrato().atStartOfDay() : LocalDateTime.now())
                 .build();
 
         Contrato contratoGuardado = contratoRepository.save(contrato);
 
-        // EVALUAR INTENCIÓN DE PAGO PARA EL LOTE
-        Double abonoInicialPrometido = (req.getAbonoInicialReal() != null) ? req.getAbonoInicialReal() : 0.0;
-        if (abonoInicialPrometido >= req.getMontoInicialAcordado()) {
-            lote.setEstadoVenta(EstadoLote.VENDIDO);
-        } else {
-            lote.setEstadoVenta(EstadoLote.SEPARADO);
-        }
-        loteRepository.save(lote);
-
         // CREAR LA CUOTA 0
         Cuota cuota0 = Cuota.builder()
                 .contrato(contratoGuardado)
                 .numeroCuota(0)
+                .tipoCuota(TipoCuota.INICIAL) // NUEVO
                 .montoTotal(req.getMontoInicialAcordado())
-                .montoPagado(0.0) // Nace en 0, esperando confirmación de caja
+                .montoPagado(0.0) // Se mantiene tu lógica de seguridad: Nace en 0, esperando confirmación de caja
                 .fechaVencimiento((req.getFechaLimiteInicial() != null) ? req.getFechaLimiteInicial() : LocalDate.now())
                 .estado(EstadoCuota.PENDIENTE)
                 .build();
         cuota0 = cuotaRepository.save(cuota0);
 
-        // ✅ NUEVA LÓGICA: GENERAR EL PAGO "POR VALIDAR"
+        // LÓGICA DE PAGOS: GENERAR EL PAGO "POR VALIDAR" (Intacto, como lo hiciste)
         if (abonoInicialPrometido > 0) {
             Pago pagoPendiente = Pago.builder()
                     .cuota(cuota0)
@@ -177,10 +199,17 @@ public class ContratoService {
             List<CuotaPreview> proyeccion = simularCronograma(sim);
             List<Cuota> cuotasAGuardar = new ArrayList<>();
 
+            // NUEVO: Variable para identificar rápido las cuotas especiales en tu bucle
+            int cantidadEspeciales = (req.getCuotasEspeciales() != null) ? req.getCuotasEspeciales() : 0;
+
             for (CuotaPreview cp : proyeccion) {
+                // NUEVO: Etiquetamos si es especial o mensual basándonos en tu lógica matemática
+                TipoCuota tipoDeCuota = (cp.getNumeroCuota() <= cantidadEspeciales) ? TipoCuota.ESPECIAL : TipoCuota.MENSUAL;
+
                 cuotasAGuardar.add(Cuota.builder()
                         .contrato(contratoGuardado)
                         .numeroCuota(cp.getNumeroCuota())
+                        .tipoCuota(tipoDeCuota) // NUEVO
                         .montoTotal(cp.getMonto())
                         .montoPagado(0.0)
                         .fechaVencimiento(cp.getFechaVencimiento())
@@ -188,6 +217,12 @@ public class ContratoService {
                         .build());
             }
             cuotaRepository.saveAll(cuotasAGuardar);
+        }
+
+        // NUEVO: Si vino de una cotización, marcarla como convertida
+        if (cotizacion != null) {
+            cotizacion.setEstado(com.sistema.base.api.core.Financiamiento.Cotizacion.EstadoCotizacion.CONVERTIDA_A_CONTRATO);
+            cotizacionRepository.save(cotizacion);
         }
 
         return contratoGuardado;

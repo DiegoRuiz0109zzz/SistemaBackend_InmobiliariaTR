@@ -1,5 +1,6 @@
 package com.sistema.base.api.core.Financiamiento.Contrato.dtos;
 
+import com.sistema.base.api.core.Financiamiento.Contrato.TipoInicial;
 import lombok.Data;
 import java.time.LocalDate;
 
@@ -21,6 +22,10 @@ public class ContratoRequest {
 
     private Integer cuotasEspeciales;
     private Double montoCuotaEspecial;
+
+    private Long cotizacionId; // Para amarrar el contrato a la cotización
+    private TipoInicial tipoInicial; // CERO, PARCIAL, TOTAL
+    private Boolean cuotasFlexibles; // El interruptor (true/false)
 
     // NUEVO: Observación manual del vendedor
     private String observacion;
