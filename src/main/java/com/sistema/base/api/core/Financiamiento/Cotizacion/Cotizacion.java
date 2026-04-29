@@ -52,6 +52,12 @@ public class Cotizacion {
     private Integer cuotasEspeciales;
     private Double montoCuotaEspecial;
 
+
+    private Double montoCuotaCotizacion;
+
+    @Column(nullable = false)
+    private Double saldoFinanciar;
+
     // EL NUEVO INTERRUPTOR DE CUOTAS FLEXIBLES
     @Column(name = "cuotas_flexibles")
     private Boolean cuotasFlexibles;

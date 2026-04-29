@@ -67,6 +67,8 @@ public class CotizacionService {
                 .cantidadCuotas(req.getCantidadCuotas())
                 .cuotasEspeciales(req.getCuotasEspeciales())
                 .montoCuotaEspecial(req.getMontoCuotaEspecial())
+                .montoCuotaCotizacion(req.getMontoCuotaCotizacion())
+                .saldoFinanciar(req.getSaldoFinanciar())
                 .fechaCotizacion(hoy)
                 .fechaValidez(hoy.plusDays(diasValidez))
                 .estado(EstadoCotizacion.VIGENTE)
