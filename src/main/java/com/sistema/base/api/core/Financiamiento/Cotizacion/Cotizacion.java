@@ -1,6 +1,7 @@
 package com.sistema.base.api.core.Financiamiento.Cotizacion;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.sistema.base.api.core.Financiamiento.Contrato.TipoInicial;
 import com.sistema.base.api.core.Lotizacion.Lote.Lote;
 import com.sistema.base.api.core.Usuario.Interesados.Interesado;
 import com.sistema.base.api.core.Vendedores.Vendedor;
@@ -35,6 +36,10 @@ public class Cotizacion {
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Vendedor vendedor;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tipo_inicial", length = 20)
+    private TipoInicial tipoInicial;
+
     @Column(nullable = false)
     private Double precioTotal;
 
@@ -46,6 +51,16 @@ public class Cotizacion {
 
     private Integer cuotasEspeciales;
     private Double montoCuotaEspecial;
+
+
+    private Double montoCuotaCotizacion;
+
+    @Column(nullable = false)
+    private Double saldoFinanciar;
+
+    // EL NUEVO INTERRUPTOR DE CUOTAS FLEXIBLES
+    @Column(name = "cuotas_flexibles")
+    private Boolean cuotasFlexibles;
 
     @Column(nullable = false)
     private LocalDate fechaCotizacion;
@@ -60,4 +75,11 @@ public class Cotizacion {
 
     @Builder.Default
     private boolean enabled = true;
+
+    @PrePersist
+    protected void onCreate() {
+        if (this.cuotasFlexibles == null) {
+            this.cuotasFlexibles = false;
+        }
+    }
 }

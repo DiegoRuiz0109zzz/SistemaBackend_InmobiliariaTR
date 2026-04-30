@@ -11,7 +11,7 @@ import java.util.List;
 public class CuotaService {
 
     private final CuotaRepository cuotaRepository;
-    private final ContratoRepository contratoRepository; // Se asumirá que lo crearás después
+    private final ContratoRepository contratoRepository;
 
     @Transactional(readOnly = true)
     public List<Cuota> listarPorContrato(Long contratoId) {
@@ -24,14 +24,20 @@ public class CuotaService {
                 .orElseThrow(() -> new RuntimeException("Cuota no encontrada"));
     }
 
-    // La actualización de montos normalmente se hace a través de los Pagos (Amortizaciones),
-    // pero dejamos este método para ajustes administrativos manuales.
     @Transactional
     public Cuota actualizar(Long id, Cuota request) {
         Cuota cuota = obtenerPorId(id);
+
+        // Actualizamos los campos permitidos administrativamente
         cuota.setFechaVencimiento(request.getFechaVencimiento());
         cuota.setMontoTotal(request.getMontoTotal());
         cuota.setEstado(request.getEstado());
+
+        // ✅ Añadimos la capacidad de corregir el tipo de cuota
+        if (request.getTipoCuota() != null) {
+            cuota.setTipoCuota(request.getTipoCuota());
+        }
+
         return cuotaRepository.save(cuota);
     }
 }

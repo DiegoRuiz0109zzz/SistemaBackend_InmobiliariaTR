@@ -1,6 +1,7 @@
 package com.sistema.base.api.core.Financiamiento.Contrato;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.sistema.base.api.core.Financiamiento.Cotizacion.Cotizacion;
 import com.sistema.base.api.core.Lotizacion.Lote.Lote;
 import com.sistema.base.api.core.Usuario.Clientes.Cliente;
 import com.sistema.base.api.core.Vendedores.Vendedor;
@@ -9,6 +10,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -39,12 +42,21 @@ public class Contrato {
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Vendedor vendedor;
 
-    // Matemática del Financiamiento
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cotizacion_id")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    private Cotizacion cotizacionOrigen;
+
+    // DATOS DEL CONTRATO
     @Column(nullable = false)
     private Double precioTotal;
 
+    // GESTION DE INICIAL
     @Column(nullable = false)
     private Double montoInicial;
+
+    @Column(nullable = false)
+    private Double montoAbonadoIncial;
 
     @Column(nullable = false)
     private Double saldoFinanciar;
@@ -53,25 +65,45 @@ public class Contrato {
     private Integer cantidadCuotas;
 
     @Column(length = 1000)
-    private String descripcion; // Se autogenerará
+    private String descripcion;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tipo_inicial", length = 20)
+    private TipoInicial tipoInicial;
 
     @Column(length = 1000)
-    private String observacion; // Escrita por el vendedor
+    private String observacion;
+
+    @Column(name = "cuotas_flexibles")
+    private Boolean cuotasFlexibles;
 
     // Fechas
+    @Column(name="fecha_inicio_cronograma")
+    private LocalDate fechaInicioCronograma;
+
     @Column(name = "fecha_contrato")
     private LocalDateTime fechaContrato;
 
     @Column(name = "fecha_registro")
     private LocalDateTime fechaRegistro;
 
+    // --- ESTADO Y AUDITORÍA ---
+    @Enumerated(EnumType.STRING)
+    @Column(name = "estado_contrato", length = 30)
+    private EstadoContrato estadoContrato;
+
     @Builder.Default
+    @Column(name = "enabled", nullable = false)
     private boolean enabled = true;
 
     @PrePersist
     protected void onCreate() {
-        fechaRegistro = LocalDateTime.now();
+        this.fechaRegistro = LocalDateTime.now();
+        if (this.estadoContrato == null) {
+            this.estadoContrato = EstadoContrato.ACTIVO;
+        }
+        if (this.cuotasFlexibles == null) {
+            this.cuotasFlexibles = false;
+        }
     }
-
-
 }

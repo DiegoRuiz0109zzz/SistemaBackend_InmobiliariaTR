@@ -27,23 +27,41 @@ public class Cuota {
     private Contrato contrato;
 
     @Column(nullable = false)
-    private Integer numeroCuota; // Ej: 1, 2, 3...
-
-    @Column(nullable = false)
-    private Double montoTotal; // Lo que debe pagar (Ej: 400.0)
-
-    @Builder.Default
-    @Column(nullable = false)
-    private Double montoPagado = 0.0; // Lo que va pagando (Empieza en 0)
-
-    @Column(nullable = false)
-    private LocalDate fechaVencimiento; // Fecha límite de pago
+    private Integer numeroCuota; // 0 (para inicial), 1, 2, 3... o 99 para especiales
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "tipo_cuota", length = 20)
+    private TipoCuota tipoCuota; // INICIAL, MENSUAL, ESPECIAL
+
     @Column(nullable = false)
-    @Builder.Default
-    private EstadoCuota estado = EstadoCuota.PENDIENTE;
+    private Double montoTotal;
 
     @Builder.Default
+    @Column(nullable = false)
+    private Double montoPagado = 0.0;
+
+    @Column(nullable = false)
+    private LocalDate fechaVencimiento;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private EstadoCuota estado; // PENDIENTE, PAGADO_PARCIAL, PAGADO_TOTAL, VENCIDO
+
+    // ✅ CAMBIO CLAVE: Agregado para que tu Repositorio no falle
+    @Builder.Default
+    @Column(nullable = false)
     private boolean enabled = true;
+
+    @PrePersist
+    protected void onCreate() {
+        if (this.montoPagado == null) {
+            this.montoPagado = 0.0;
+        }
+        if (this.estado == null) {
+            this.estado = EstadoCuota.PENDIENTE;
+        }
+        if (this.tipoCuota == null) {
+            this.tipoCuota = TipoCuota.MENSUAL;
+        }
+    }
 }

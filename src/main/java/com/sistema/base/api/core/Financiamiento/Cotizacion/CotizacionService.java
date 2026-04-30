@@ -35,12 +35,10 @@ public class CotizacionService {
         }
     }
 
-    @Transactional(readOnly = true)
     public List<Cotizacion> listarTodas() {
         return cotizacionRepository.findByEnabledTrueOrderByFechaCotizacionDesc();
     }
 
-    @Transactional(readOnly = true)
     public List<Cotizacion> buscarPorDniInteresado(String dni) {
         return cotizacionRepository.findByInteresadoNumeroDocumentoAndEnabledTrueOrderByFechaCotizacionDesc(dni);
     }
@@ -61,14 +59,20 @@ public class CotizacionService {
                 .lote(lote)
                 .interesado(interesado)
                 .vendedor(vendedor)
+                // --- APLICAMOS LOS NUEVOS CAMPOS AQUÍ ---
+                .tipoInicial(req.getTipoInicial())
+                .cuotasFlexibles(req.getCuotasFlexibles() != null ? req.getCuotasFlexibles() : false)
                 .precioTotal(req.getPrecioTotal())
                 .montoInicialAcordado(req.getMontoInicialAcordado())
                 .cantidadCuotas(req.getCantidadCuotas())
                 .cuotasEspeciales(req.getCuotasEspeciales())
                 .montoCuotaEspecial(req.getMontoCuotaEspecial())
+                .montoCuotaCotizacion(req.getMontoCuotaCotizacion())
+                .saldoFinanciar(req.getSaldoFinanciar())
                 .fechaCotizacion(hoy)
                 .fechaValidez(hoy.plusDays(diasValidez))
                 .estado(EstadoCotizacion.VIGENTE)
+                .enabled(true)
                 .build();
 
         return cotizacionRepository.save(cotizacion);
