@@ -50,6 +50,8 @@ public class InteresadoService {
         interesado.setDistrito(interesadoRequest.getDistrito());
         interesado.setProvincia(interesadoRequest.getProvincia());
         interesado.setUbigeo(interesadoRequest.getUbigeo());
+        interesado.setDireccion(interesadoRequest.getDireccion());
+        interesado.setEstadoCivil(interesadoRequest.getEstadoCivil());
 
         return interesadoRepository.save(interesado);
     }

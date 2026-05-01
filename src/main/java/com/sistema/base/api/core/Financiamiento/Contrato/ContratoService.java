@@ -1,5 +1,7 @@
 package com.sistema.base.api.core.Financiamiento.Contrato;
 
+import com.sistema.base.api.core.Empresa.Empresa;
+import com.sistema.base.api.core.Empresa.EmpresaRepository;
 import com.sistema.base.api.core.Financiamiento.Contrato.dtos.ContratoRequest;
 import com.sistema.base.api.core.Financiamiento.Contrato.dtos.CuotaPreview;
 import com.sistema.base.api.core.Financiamiento.Contrato.dtos.SimulacionRequest;
@@ -22,12 +24,23 @@ import com.sistema.base.api.core.Vendedores.VendedorRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.thymeleaf.TemplateEngine;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
+
+
+import org.thymeleaf.context.Context;
+import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
+import java.io.ByteArrayOutputStream;
 
 @Service
 @RequiredArgsConstructor
@@ -39,9 +52,12 @@ public class ContratoService {
     private final ClienteRepository clienteRepository;
     private final VendedorRepository vendedorRepository;
     private final PagoRepository pagoRepository;
+    private final EmpresaRepository empresaRepository;
 
     // NUEVO: Inyectamos el repositorio de Cotizaciones
     private final CotizacionRepository cotizacionRepository;
+
+    private final TemplateEngine templateEngine;
 
     // 1. EL SIMULADOR (Intacto, exactamente tu lógica)
     public List<CuotaPreview> simularCronograma(SimulacionRequest request) {
@@ -108,6 +124,13 @@ public class ContratoService {
         Cliente cliente = clienteRepository.findById(req.getClienteId())
                 .orElseThrow(() -> new RuntimeException("El cliente con ID " + req.getClienteId() + " no existe."));
 
+        Cliente coComprador = null;
+        // Usa getCoCompradorId() si cambiaste el nombre en el DTO como sugerí en el paso 1
+        if (req.getCoCompradorId() != null) {
+            coComprador = clienteRepository.findById(req.getCoCompradorId())
+                    .orElseThrow(() -> new RuntimeException("El co-comprador con ID " + req.getCoCompradorId() + " no existe."));
+        }
+
         Vendedor vendedor = vendedorRepository.findById(req.getVendedorId())
                 .orElseThrow(() -> new RuntimeException("El vendedor con ID " + req.getVendedorId() + " no existe."));
 
@@ -145,6 +168,7 @@ public class ContratoService {
         Contrato contrato = Contrato.builder()
                 .lote(lote)
                 .cliente(cliente)
+                .coComprador(coComprador)
                 .vendedor(vendedor)
                 .cotizacionOrigen(cotizacion) // NUEVO
                 .precioTotal(req.getPrecioTotal())
@@ -238,4 +262,87 @@ public class ContratoService {
         return contratoRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Contrato no encontrado"));
     }
+
+    private String getImagenBase64(String nombreArchivo) {
+        try {
+            String rutaLocal = "uploads/imagens/" + nombreArchivo;
+            Path path = Paths.get(rutaLocal);
+
+            if (Files.exists(path)) {
+                byte[] imageBytes = Files.readAllBytes(path);
+                return "data:image/png;base64," + Base64.getEncoder().encodeToString(imageBytes);
+            } else {
+                System.err.println("¡ALERTA PDF! La imagen no existe en la ruta: " + path.toAbsolutePath());
+            }
+        } catch (Exception e) {
+            System.err.println("Error cargando imagen para PDF: " + nombreArchivo);
+        }
+        return null;
+    }
+
+    /**
+     * Genera el PDF "al vuelo" procesando la plantilla HTML y las variables de BD.
+     */
+    public byte[] generarDocumentoPdf(Long contratoId) {
+
+        // 1. Obtener el contrato de la Base de Datos
+        Contrato contrato = contratoRepository.findById(contratoId)
+                .orElseThrow(() -> new RuntimeException("Contrato no encontrado con ID: " + contratoId));
+
+        // 2. OBTENER LAS CUOTAS DEL CONTRATO
+        List<Cuota> cuotas = cuotaRepository.findByContratoIdAndEnabledTrueOrderByNumeroCuotaAsc(contratoId);
+
+        // 2.1 Buscar la fecha de la cuota cero (saldo de inicial) para la Ficha de Separación
+        LocalDate fechaCuotaCero = cuotas.stream()
+                .filter(c -> (c.getNumeroCuota() != null && c.getNumeroCuota() == 0) || c.getTipoCuota() == TipoCuota.INICIAL)
+                .map(Cuota::getFechaVencimiento)
+                .findFirst()
+                .orElse(null); // Si el cliente pagó la inicial completa el día 1, esto será null (y está bien)
+
+        // 2.2 Filtrar solo las cuotas mensuales para el cronograma del Contrato Activo (Omitimos la inicial)
+        List<Cuota> cuotasMensuales = cuotas.stream()
+                .filter(c -> c.getNumeroCuota() != null && c.getNumeroCuota() > 0)
+                .toList();
+
+        Empresa empresa = empresaRepository.findById(1L).orElse(null);
+
+
+        // 3. Preparar las variables para Thymeleaf
+        Context context = new Context();
+        context.setVariable("contrato", contrato);
+
+        context.setVariable("empresa", empresa);
+
+        context.setVariable("fechaCuotaCero", fechaCuotaCero);
+        context.setVariable("cuotasMensuales", cuotasMensuales); // Inyectamos la lista para la tabla
+
+        // 4. Inyectar las imágenes en Base64
+        context.setVariable("imgCabecera", getImagenBase64("cabezera.png"));
+        context.setVariable("imgPie", getImagenBase64("pie.png"));
+        context.setVariable("imgFondo", getImagenBase64("fondo.png"));
+
+
+
+        // 5. Seleccionar la plantilla según el estado
+        String template = (contrato.getEstadoContrato() == EstadoContrato.SEPARADO)
+                ? "ficha-separacion"
+                : "compromiso-venta";
+
+        // 6. Procesar el HTML
+        String htmlContenido = templateEngine.process(template, context);
+
+        // 7. Convertir HTML a PDF
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            PdfRendererBuilder builder = new PdfRendererBuilder();
+            builder.useFastMode();
+            builder.withHtmlContent(htmlContenido, null);
+            builder.toStream(outputStream);
+            builder.run();
+
+            return outputStream.toByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException("Error fatal al fabricar el PDF: " + e.getMessage());
+        }
+    }
+
 }

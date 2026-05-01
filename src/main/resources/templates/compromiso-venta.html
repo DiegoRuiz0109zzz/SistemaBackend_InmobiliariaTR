@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <style>
+        /* CONFIGURACIÓN EXACTA DE MÁRGENES */
+        @page {
+            size: A4;
+            /* SE AJUSTARON LOS MÁRGENES PARA MAXIMIZAR EL ESPACIO DE LA PÁGINA 2 */
+            margin-top: 3.5cm;
+            margin-bottom: 2.8cm;
+            margin-left: 1.91cm;
+            margin-right: 1.91cm;
+
+            @top-center { content: element(header); }
+            @bottom-center { content: element(footer); }
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            font-size: 11pt;
+            line-height: 1.5;
+            color: #000;
+            text-align: justify;
+        }
+
+        /* CABECERA Y PIE DE PÁGINA */
+        div.header { position: running(header); width: 210mm; margin-left: -1.91cm; height: 130px; }
+        div.header img { width: 100%; height: 100%; display: block; }
+        div.footer { position: running(footer); width: 210mm; margin-left: -1.91cm; height: 100px; }
+        div.footer img { width: 100%; height: 100%; display: block; }
+
+        /* MARCA DE AGUA */
+        .watermark { position: fixed; top: 300px; left: 100px; z-index: -1; }
+        .watermark img { width: 500px; }
+
+        /* TIPOGRAFÍA Y ESTRUCTURA LEGAL */
+        .uppercase-text { text-transform: uppercase; }
+        .highlight { font-weight: bold; }
+        .placeholder { font-weight: bold; color: #d32f2f; }
+        .underline { text-decoration: underline; }
+
+        /* NUEVA CLASE PARA CURSIVA Y SUBRAYADO */
+        .cursiva-subrayado {
+            font-style: italic;
+            text-decoration: underline;
+        }
+
+        /* CLASE PARA FORZAR SALTO DE PÁGINA ANTES DEL PRECIO */
+        .salto-pagina {
+            page-break-before: always;
+        }
+
+        .title {
+            font-size: 14pt;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 25px;
+            margin-top: 10px;
+        }
+
+        .clause-title {
+            text-align: left;
+            font-weight: bold;
+            margin-top: 20px;
+            margin-bottom: 2px;
+        }
+
+        p {
+            margin-top: 0px;
+            margin-bottom: 15px;
+            text-align: justify;
+        }
+
+        ul.linderos-list {
+            list-style-type: disc;
+            padding-left: 40px;
+            margin-top: 5px;
+            margin-bottom: 15px;
+        }
+        ul.linderos-list li { margin-bottom: 5px; }
+
+        ul.legal-list, ol { margin-top: 5px; margin-bottom: 15px; padding-left: 25px; }
+        ul.legal-list li, ol li { margin-bottom: 5px; text-align: justify; }
+
+        /* TABLA DE CRONOGRAMA COMPACTADA PARA QUE ENTRE EN UNA SOLA HOJA */
+        .cronograma-table {
+            width: 92%;
+            margin: 5px auto 15px auto;
+            border-collapse: collapse;
+            font-size: 9.5pt; /* Reducido levemente para asegurar que quepan 36 filas */
+        }
+        .cronograma-table th {
+            border: 1px solid #000;
+            text-align: center;
+            font-weight: bold;
+            padding: 2px;
+        }
+        .cronograma-table td {
+            border-left: 1px solid #000;
+            border-right: 1px solid #000;
+            border-top: none;
+            border-bottom: none;
+            vertical-align: middle;
+            padding: 0px 5px; /* Reducción de padding vertical */
+            line-height: 1.2; /* Interlineado más ajustado solo para la tabla */
+        }
+        .cronograma-table tbody tr:last-child td {
+            border-bottom: 1px solid #000;
+        }
+
+        .col-cuota { width: 15%; text-align: center; padding: 0px; white-space: nowrap; }
+        .col-fecha { width: 55%; padding: 0; }
+        .col-monto { width: 30%; padding: 0; }
+
+        .inner-table { width: 100%; border-collapse: collapse; border: none; margin: 0; padding: 0; }
+        .inner-table td { border: none !important; padding: 0px 6px; vertical-align: middle; font-size: 9.5pt; white-space: nowrap; line-height: 1.2; }
+
+        .emission-date { text-align: right; margin-top: 30px; font-size: 11pt; font-weight: bold; }
+
+        /* TABLA DE FIRMAS */
+        .signatures-table { width: 100%; margin-top: 70px; page-break-inside: avoid; table-layout: fixed; }
+        .signatures-table td { width: 50%; vertical-align: top; }
+        .sig-block { width: 85%; margin: 0 auto; text-align: center; }
+        .signature-line { border-top: 1px solid #000; padding-top: 5px; margin-bottom: 5px; font-size: 11pt; }
+        .sig-details { text-align: left; margin-top: 15px; font-size: 10.5pt; line-height: 1.3; }
+
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <img th:if="${imgCabecera != null}" th:src="${imgCabecera}" alt="Cabecera"/>
+</div>
+
+<div class="footer">
+    <img th:if="${imgPie != null}" th:src="${imgPie}" alt="Pie de pagina"/>
+</div>
+
+<div class="watermark">
+    <img th:if="${imgFondo != null}" th:src="${imgFondo}" alt="Marca de Agua"/>
+</div>
+
+<div class="title">CONTRATO PRIVADO - COMPROMISO DE VENTA DE UN LOTE DE TERRENO</div>
+
+<p style="margin-top: 10px;">
+    Conste el presente documento privado, Compromiso de Venta de un Lote de Terreno, que celebra de una parte como <strong>PROPIETARIO:
+    <span class="uppercase-text" th:if="${empresa != null}" th:text="${empresa.razonSocial}"></span>
+    <span class="uppercase-text" th:unless="${empresa != null}">INMOBILIARIA TERRANORT S.A.C.</span>
+</strong>
+    con <span class="highlight">RUC </span>
+    <span class="highlight" th:if="${empresa != null}" th:text="${empresa.ruc}"></span>
+    <span class="highlight" th:unless="${empresa != null}">20613699890</span>
+    domiciliada en
+    <span th:if="${empresa != null}" th:text="${empresa.direccion}"></span>
+    <span th:unless="${empresa != null}">Calle los Jazmines Mz K lote 5 B sector Villa Judicial</span>
+    representada por su Gerente General: <strong><span class="uppercase-text">JOSÉ RAUL BELLODAS GUTIERREZ</span></strong> identificado con <span class="highlight"> DNI: N.º 18178005</span>, y de la otra parte como <span class="highlight">COMPRADOR(A) </span>doña(don): <span class="highlight uppercase-text" th:text="|${contrato.cliente.nombres} ${contrato.cliente.apellidos}|"></span>, identificado(a) con DNI: N.° <span class="highlight" th:text="${contrato.cliente.numeroDocumento}"></span>, estado Civil:
+
+    <span class="uppercase-text" th:if="${contrato.cliente.estadoCivil != null}" th:text="${contrato.cliente.estadoCivil}"></span>
+    <span class="uppercase-text" th:unless="${contrato.cliente.estadoCivil != null}">______________</span>,
+
+    con domicilio en:
+    <span class="highlight uppercase-text" th:if="${contrato.cliente.direccion != null}" th:text="${contrato.cliente.direccion}"></span>
+    <span class="highlight uppercase-text" th:unless="${contrato.cliente.direccion != null}">_________________</span>, Distrito:
+
+    <span class="highlight uppercase-text" th:if="${contrato.cliente.distrito != null}" th:text="${contrato.cliente.distrito}"></span>
+    <span class="highlight uppercase-text" th:unless="${contrato.cliente.distrito != null}">_________________</span>, Provincia:
+
+    <span class="highlight uppercase-text" th:if="${contrato.cliente.provincia != null}" th:text="${contrato.cliente.provincia}"></span>
+    <span class="highlight uppercase-text" th:unless="${contrato.cliente.provincia != null}">_________________</span> y Departamento de
+
+    <span class="highlight uppercase-text" th:if="${contrato.cliente.departamento != null}" th:text="${contrato.cliente.departamento}"></span>
+    <span class="highlight uppercase-text" th:unless="${contrato.cliente.departamento != null}">_________________</span>
+
+    <th:block th:if="${contrato.coComprador != null}">
+        y como <span class="highlight">COMPRADOR(A) </span>don(doña): <span class="highlight uppercase-text" th:text="|${contrato.coComprador.nombres} ${contrato.coComprador.apellidos}|"></span>, identificado(a) con DNI: N.° <span class="highlight" th:text="${contrato.coComprador.numeroDocumento}"></span>, estado Civil:
+
+        <span class="uppercase-text" th:if="${contrato.coComprador.estadoCivil != null}" th:text="${contrato.coComprador.estadoCivil}"></span>
+        <span class="uppercase-text" th:unless="${contrato.coComprador.estadoCivil != null}">______________</span>, con domicilio en:
+
+        <span class="highlight uppercase-text" th:if="${contrato.coComprador.direccion != null}" th:text="${contrato.coComprador.direccion}"></span>
+        <span class="highlight uppercase-text" th:unless="${contrato.coComprador.direccion != null}">_________________</span>, Distrito:
+
+        <span class="highlight uppercase-text" th:if="${contrato.coComprador.distrito != null}" th:text="${contrato.coComprador.distrito}"></span>
+        <span class="highlight uppercase-text" th:unless="${contrato.coComprador.distrito != null}">_________________</span>, Provincia:
+
+        <span class="highlight uppercase-text" th:if="${contrato.coComprador.provincia != null}" th:text="${contrato.coComprador.provincia}"></span>
+        <span class="highlight uppercase-text" th:unless="${contrato.coComprador.provincia != null}">_________________</span> y Departamento de
+
+        <span class="highlight uppercase-text" th:if="${contrato.coComprador.departamento != null}" th:text="${contrato.coComprador.departamento}"></span>
+        <span class="highlight uppercase-text" th:unless="${contrato.coComprador.departamento != null}">_________________</span>
+    </th:block>; bajo los términos siguientes:
+</p>
+
+<div class="clause-title">TÍTULO</div>
+<p>
+    <strong class="underline">PRIMERO:</strong> El vendedor es propietario del <span class="highlight">LOTE N° </span><span class="highlight" th:text="${contrato.lote.numero}"></span> de la <span class="highlight">MZ. "</span><span class="highlight uppercase-text" th:text="${contrato.lote.manzana.nombre}"></span>" con un área de <span class="highlight" th:text="${contrato.lote.area}"></span><span class="highlight"> M², </span>ubicado dentro del predio Rural denominado: <span class="highlight">PARTE DEL LOTE 8, ZONA TERRITORIO DE LA COMUNIDAD DE OLMOS, SECTOR OLMOS,</span> DISTRITO DE OLMOS, PROVINCIA Y DEPARTAMENTO DE LAMBAYEQUE, cuyo Proyecto se denomina <span class="highlight uppercase-text" th:text="${contrato.lote.manzana.etapa.urbanizacion.nombre}"></span>. Y, cuyo dominio, áreas, linderos y medidas perimétricas se encuentran debidamente inscritas en la Partida Electrónica<span class="highlight"> N° 11290424</span> del Registro de predios de la SUNARP - Chiclayo.
+</p>
+
+<div class="clause-title">OBJETO</div>
+<p>
+    <strong class="underline">SEGUNDO:</strong> El <strong>PROPIETARIO</strong> se compromete a vender al <strong>COMPRADOR(A)</strong> el lote de terreno separado que es materia del presente Compromiso, que se describe a continuación: <strong>MZ. "<span class="highlight uppercase-text" th:text="${contrato.lote.manzana.nombre}"></span>" LOTE N° <span class="highlight" th:text="${contrato.lote.numero}"></span></strong>, que cuenta con un área de: <span class="highlight" th:text="${contrato.lote.area}"></span><strong> M²</strong>, siendo sus linderos y medidas perimétricas las siguientes:
+</p>
+
+<ul class="linderos-list">
+    <li>Por el Frente: <span class="placeholder">[LINDERO FRENTE]</span></li>
+    <li>Por el Lado Derecho: <span class="placeholder">[LINDERO DERECHO]</span></li>
+    <li>Por el Lado Izquierdo: <span class="placeholder">[LINDERO IZQUIERDO]</span></li>
+    <li>Por el Fondo: <span class="placeholder">[LINDERO FONDO]</span></li>
+    <li>Perímetro: <span class="placeholder">[PERÍMETRO TOTAL]</span></li>
+</ul>
+
+<!-- SALTO DE PÁGINA APLICADO AQUÍ -->
+<div class="clause-title salto-pagina">PRECIO</div>
+<p style="margin-bottom: 5px;">
+    <strong class="underline">TERCERO:</strong> El precio de venta pactado de común acuerdo es de S/.
+    <span th:if="${contrato.saldoFinanciar != null and contrato.montoInicial != null}" class="highlight" th:text="${#numbers.formatDecimal(contrato.saldoFinanciar + contrato.montoInicial, 1, 'COMMA', 2, 'POINT')}"></span>
+    <span th:unless="${contrato.saldoFinanciar != null and contrato.montoInicial != null}" class="highlight">_________</span>
+    (<span class="placeholder">[PRECIO TOTAL EN LETRAS]</span>) por el lote de terreno asignado como <strong>MZ "<span class="highlight uppercase-text" th:text="${contrato.lote.manzana.nombre}"></span>" LOTE N° <span class="highlight" th:text="${contrato.lote.numero}"></span></strong>, importe que el <strong>COMPRADOR(A)</strong> pagará al <strong>PROPIETARIO</strong> de la siguiente manera: Pago inicial de <strong>S/.</strong>
+
+    <span th:if="${contrato.montoInicial != null}" class="highlight" th:text="${#numbers.formatDecimal(contrato.montoInicial, 1, 'COMMA', 2, 'POINT')}"></span>
+    <span th:unless="${contrato.montoInicial != null}" class="highlight">_________</span>
+    soles. Quedando un saldo restante de: <strong>S/.</strong>
+
+    <span th:if="${contrato.saldoFinanciar != null}" class="highlight" th:text="${#numbers.formatDecimal(contrato.saldoFinanciar, 1, 'COMMA', 2, 'POINT')}"></span>
+    <span th:unless="${contrato.saldoFinanciar != null}" class="highlight">_________</span>
+    soles, los cuales se compromete a cancelar al vencimiento de cada cuota según cronograma que se detalla a continuación:
+</p>
+<br/>
+
+<!-- LA TABLA DEL CRONOGRAMA RECONSTRUIDA -->
+<table class="cronograma-table">
+    <thead>
+    <tr>
+        <th>CUOTA</th>
+        <th>FECHA</th>
+        <th>IMPORTE</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="cuota : ${cuotasMensuales}">
+        <td class="col-cuota uppercase-text" th:text="|CUOTA ${cuota.numeroCuota}|"></td>
+
+        <td class="col-fecha">
+            <table class="inner-table">
+                <tr>
+                    <td style="text-align: left; width: 45%;" class="uppercase-text">
+                        <span th:text="${#temporals.format(cuota.fechaVencimiento, 'dd')}"></span> DE
+                        <span th:text="${#temporals.format(cuota.fechaVencimiento, 'MMMM')}"></span>
+                    </td>
+                    <td style="text-align: center; width: 35%;" class="uppercase-text">DEL AÑO</td>
+                    <td style="text-align: right; width: 20%;" th:text="${#temporals.format(cuota.fechaVencimiento, 'yyyy')}"></td>
+                </tr>
+            </table>
+        </td>
+
+        <td class="col-monto">
+            <table class="inner-table">
+                <tr>
+                    <td style="text-align: left; width: 65%;">
+                        <span th:if="${cuota.montoTotal != null}" th:text="|S/. ${#numbers.formatDecimal(cuota.montoTotal, 1, 'COMMA', 2, 'POINT')}|"></span>
+                    </td>
+                    <td style="text-align: right; width: 35%;" class="uppercase-text">SOLES</td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<br/>
+<br/>
+<br/>
+<div class="clause-title">OBLIGACIONES</div>
+<p><strong class="underline">CUARTO:</strong> <strong> EL COMPRADOR(A)</strong> se obliga a:</p>
+<ul class="legal-list" style="list-style-type: lower-alpha;">
+    <li>Suscribir la Minuta y Escritura Pública del Contrato Definitivo de Compra Venta de Lote de Terreno materia del presente Contrato Privado Compromiso de Compra Venta de Lote de Terreno.</li>
+    <li>Asumir todos los costos por concepto de trámites legales y Notariales (Suscripción de Minuta, Escritura Pública de Compraventa y gastos de registro), que correspondan respecto del lote de terreno, objeto del presente Contrato Privado Compromiso de Compra Venta de Lote de Terreno.</li>
+    <li>No ceder su posición contractual, sin la autorización previa y por escrito del <strong>VENDEDOR.</strong></li>
+</ul>
+
+<p><strong class="underline">QUINTO:</strong> <strong> EL VENDEDOR</strong> se obliga a:</p>
+<ul class="legal-list" style="list-style-type: lower-alpha;">
+    <li>Realizar todas las gestiones administrativas y municipales, sobre la subdivisión del lote matriz, que resulten necesarias para identificar el lote de terreno materia de Compra Venta.</li>
+    <li>Cumplir con firmar la Minuta y Escritura pública del Contrato Definitivo de Compra Venta de Lote de Terreno, después que el <strong>COMPRADOR(A)</strong> haya cancelado la totalidad del precio indicado en la Cláusula Tercera y el lote materia del presente se encuentre debidamente subdividido y con partida electrónica independiente en SUNARP.</li>
+    <li>Dentro del área lotizada, dejar espacios para parques y jardines.</li>
+    <li>Colocar de manera provisional puntos de agua y puntos de energía eléctrica, los costos de consumo serán asumidos por los usuarios.</li>
+    <li>El proyecto contará con factibilidad de servicios básicos: Agua y Luz; los trabajos de gestión iniciaran a partir de dos años de la firma del contrato.</li>
+    <li>Entregar el Inmueble libre de embargos y gravámenes.</li>
+    <li>Mostrar al <strong>COMPRADOR(A)</strong> la documentación sobre el avance del proceso de subdivisión del lote matriz.</li>
+</ul>
+
+<div class="clause-title">PENALIDAD</div>
+<p><strong class="underline">SEXTO:</strong></p>
+<ul class="legal-list" style="list-style-type: lower-alpha;">
+    <li>Las partes acuerdan que, en la eventualidad, que el <strong>COMPRADOR(A)</strong> no cumpliera con el pago de tres cuotas consecutivas del saldo en el plazo establecido en la Cláusula Tercera, o si se produjera desistimiento de la compra, el <strong>COMPROMISO</strong> quedará resuelto por incumplimiento de las obligaciones del <strong>COMPRADOR(A)</strong>, y respecto a los pagos que hubiera realizado será devuelto aplicando una penalidad por gastos administrativos cuyo importe mínimo será de 40%. Por este motivo de incumplimiento de pago el <strong>COMPRADOR(A)</strong> se abstendrá a realizar cualquier reclamo prejudicial o judicial respecto a esta cláusula resolutoria.</li>
+    <li>En caso el <strong>COMPRADOR(A)</strong> solicite reprogramación de su cronograma de pagos, por motivo de atraso del pago de cuotas mensuales; se aplicará un interés de 25% sobre el saldo pendiente de pago y dicho importe será incluido en las cuotas de la reprogramación.</li>
+</ul>
+
+<div class="clause-title">RESOLUCIÓN AUTOMÁTICA Y LIBERACIÓN DEL LOTE</div>
+<p>
+    <strong class="underline">SÉTIMA:</strong> Las partes acuerdan expresamente que el presente Compromiso de Compraventa quedará resuelto de pleno derecho, sin necesidad de requerimiento judicial ni arbitral, en caso de que el COMPRADOR(A) incurra en el incumplimiento del pago de tres (03) cuotas mensuales consecutivas del cronograma establecido en la Cláusula Tercera del presente contrato.
+</p>
+<p>Producido dicho incumplimiento:</p>
+<ol>
+    <li>El contrato se resolverá automáticamente, quedando sin efecto el compromiso de venta respecto del lote materia del presente contrato.</li>
+    <li>EI VENDEDOR quedará plenamente facultado para disponer nuevamente del lote, pudiendo venderlo, reservarlo o transferirlo a un tercero, quedando el lote automáticamente liberado de cualquier derecho o expectativa generada a favor del COMPRADOR(A).</li>
+    <li>Para efectos de la resolución del contrato, bastará únicamente una comunicación remitida por el VENDEDOR al número de teléfono consignado por el COMPRADOR(A) mediante mensaje de WhatsApp, la cual tendrá plena validez como notificación contractual.</li>
+    <li>EI COMPRADOR(A) reconoce y acepta expresamente la validez de las comunicaciones electrónicas o mensajes de WhatsApp como medio suficiente de notificación para todos los efectos derivados del presente contrato.</li>
+    <li>Producida la resolución del contrato, los pagos efectuados por el COMPRADOR(A) quedarán sujetos a la penalidad establecida en la cláusula precedente, sin que el COMPRADOR(A) pueda exigir la adjudicación del lote ni formular reclamo judicial o extrajudicial sobre el mismo.</li>
+</ol>
+<p class="highlight" style="text-align: center;">"EI COMPRADOR(A) renuncia expresamente a cualquier acción judicial o extrajudicial destinada a cuestionar la resolución automática pactada en la presente cláusula."</p>
+
+<div class="clause-title">DE LA FORMALIZACIÓN DE LA ENTREGA DEL INMUEBLE</div>
+<p>
+    <strong class="underline">OCTAVA:</strong> A fin de formalizar la entrega del inmueble materia del presente contrato, el <strong>VENDEDOR</strong> citará por escrito o correo electrónico a el <strong>COMPRADOR(A)</strong>, señalando el día, hora y lugar de reunión para el acto de entrega. Para tales efectos se levantará un acta, la que será firmada por las partes en señal de aceptación y conformidad. Si el <strong>COMPRADOR(A)</strong> no concurriera a la reunión, para todos los efectos del presente contrato, se considerará que el inmueble materia del mismo ha sido debidamente entregado por el <strong>VENDEDOR</strong> y recibido por el <strong>COMPRADOR(A)</strong> conforme a lo pactado en la presente cláusula y que éste último ha otorgado su plena y absoluta conformidad a dicha entrega.
+</p>
+
+<div class="clause-title">DE LA RESERVA DE PROPIEDAD</div>
+<p>
+    <strong class="underline">NOVENA:</strong> Queda expresamente establecido que el <strong>VENDEDOR</strong> se reserva la propiedad del lote de terreno materia de compraventa hasta la inscripción en registros públicos de la independización de cada lote de terrero, así también hasta que el <strong>COMPRADOR(A)</strong> haya cumplido con su obligación de pagar el íntegro del precio de venta pactado, más los intereses, gastos, moras y cualquier otra penalidad que pudiera existir, así como hasta la inscripción en registros públicos de la independencia de cada lote de terrero. En virtud de lo establecido en el párrafo precedente, el <strong>COMPRADOR(A)</strong> no podrá ceder total o parcialmente su posición contractual en la presente relación jurídica ni podrá transferir los derechos que adquiere por la celebración del presente contrato <span class="cursiva-subrayado">sin contar con el consentimiento previo, expresado y por escrito del </span><strong>VENDEDOR</strong>.
+</p>
+<p>
+    Ambas partes, declaran que celebran el presente contrato voluntariamente y sin coacción alguna y que no ha mediado error, dolo, simulación o vicio alguno que pudiera invalidar el acto.
+</p>
+<p>
+    Ambas partes suscriben el presente documento, en señal de conformidad.
+</p>
+
+<div class="emission-date uppercase-text">
+    OLMOS, <span th:if="${contrato.fechaContrato != null}" th:text="${#temporals.format(contrato.fechaContrato, 'dd')}"></span> DE
+    <span th:if="${contrato.fechaContrato != null}" th:text="${#temporals.format(contrato.fechaContrato, 'MMMM')}"></span> DEL
+    <span th:if="${contrato.fechaContrato != null}" th:text="${#temporals.format(contrato.fechaContrato, 'yyyy')}"></span>.
+</div>
+
+<table class="signatures-table">
+    <tr>
+        <td>
+            <div class="sig-block">
+                <div class="signature-line">
+                    <strong>PROPIETARIO - VENDEDOR</strong><br/>
+                    <span class="uppercase-text" th:if="${empresa != null}" th:text="${empresa.razonSocial}"></span>
+                    <span class="uppercase-text" th:unless="${empresa != null}">INMOBILIARIA TERRANORT S.A.C.</span><br/>
+                    José Raul Bellodas Gutierrez<br/>
+                    DNI: N° 18178005
+                </div>
+            </div>
+        </td>
+        <td>
+            <!-- FIRMA TITULAR 1 -->
+            <div class="sig-block">
+                <div class="signature-line">
+                    <strong>COMPRADOR (A)</strong><br/>
+                    <span class="uppercase-text" th:text="|${contrato.cliente.nombres} ${contrato.cliente.apellidos}|"></span><br/>
+                    DNI: N° <span th:text="${contrato.cliente.numeroDocumento}"></span><br/>
+                </div>
+
+                <div class="sig-details" th:if="${contrato.coComprador != null}" style="margin-bottom: 30px;">
+                    CEL: <span th:if="${contrato.cliente.telefono != null}" th:text="${contrato.cliente.telefono}"></span><br/>
+                    EMAIL: <span th:if="${contrato.cliente.email != null}" th:text="${contrato.cliente.email}"></span>
+                </div>
+                <div class="sig-details" th:unless="${contrato.coComprador != null}">
+                    CEL: <span th:if="${contrato.cliente.telefono != null}" th:text="${contrato.cliente.telefono}"></span><br/>
+                    EMAIL: <span th:if="${contrato.cliente.email != null}" th:text="${contrato.cliente.email}"></span>
+                </div>
+            </div>
+
+            <!-- FIRMA TITULAR 2 (SE OCULTA SI NO EXISTE) -->
+            <div class="sig-block" th:if="${contrato.coComprador != null}">
+                <div class="signature-line">
+                    <strong>COMPRADOR (A)</strong><br/>
+                    <span class="uppercase-text" th:text="|${contrato.coComprador.nombres} ${contrato.coComprador.apellidos}|"></span><br/>
+                    DNI: N° <span th:text="${contrato.coComprador.numeroDocumento}"></span><br/>
+                </div>
+                <div class="sig-details">
+                    CEL: <span th:if="${contrato.coComprador.telefono != null}" th:text="${contrato.coComprador.telefono}"></span><br/>
+                    EMAIL: <span th:if="${contrato.coComprador.email != null}" th:text="${contrato.coComprador.email}"></span>
+                </div>
+            </div>
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>

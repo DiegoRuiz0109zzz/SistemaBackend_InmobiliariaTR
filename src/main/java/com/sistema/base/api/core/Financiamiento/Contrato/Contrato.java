@@ -38,6 +38,11 @@ public class Contrato {
     private Cliente cliente;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "co_comprador_id", nullable = true)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    private Cliente coComprador;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "vendedor_id", nullable = false)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Vendedor vendedor;
