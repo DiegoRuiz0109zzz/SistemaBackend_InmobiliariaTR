@@ -8,6 +8,7 @@ public class CotizacionRequest {
     private Long loteId;
     private Long interesadoId;
     private Long vendedorId;
+    private Long coCompradorId;
 
     // --- NUEVOS CAMPOS AÑADIDOS ---
     private TipoInicial tipoInicial;

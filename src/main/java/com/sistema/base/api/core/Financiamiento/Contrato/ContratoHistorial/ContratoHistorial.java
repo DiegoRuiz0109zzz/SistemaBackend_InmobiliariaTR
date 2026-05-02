@@ -1,7 +1,7 @@
 package com.sistema.base.api.core.Financiamiento.Contrato.ContratoHistorial;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.sistema.base.api.core.Financiamiento.Contrato.Contrato; // Ajusta el import a tu ruta real
+import com.sistema.base.api.core.Financiamiento.Contrato.Contrato;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,13 +24,13 @@ public class ContratoHistorial {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "contrato_id", nullable = false)
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @JsonIgnoreProperties({"historiales", "hibernateLazyInitializer", "handler"}) // Evita bucle infinito JSON
     private Contrato contrato;
 
     @Column(nullable = false, length = 50)
-    private String estado; // SEPARADO, ACTIVO, ANULADO, etc.
+    private String estado;
 
-    @Column(name = "fecha_registro", nullable = false)
+    @Column(name = "fecha_registro", nullable = false, updatable = false)
     private LocalDateTime fechaRegistro;
 
     @Column(name = "ruta_documento_pdf", length = 500)
@@ -38,4 +38,9 @@ public class ContratoHistorial {
 
     @Column(length = 500)
     private String observacion;
+
+    @PrePersist
+    protected void onCreate() {
+        this.fechaRegistro = LocalDateTime.now(); // SE REGISTRA AUTOMÁTICAMENTE
+    }
 }

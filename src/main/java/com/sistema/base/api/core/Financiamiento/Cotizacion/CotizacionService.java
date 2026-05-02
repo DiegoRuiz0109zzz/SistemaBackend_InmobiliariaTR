@@ -52,6 +52,12 @@ public class CotizacionService {
         Vendedor vendedor = vendedorRepository.findById(req.getVendedorId())
                 .orElseThrow(() -> new RuntimeException("Vendedor no encontrado"));
 
+        Interesado coComprador = null;
+        if (req.getCoCompradorId() != null) {
+            coComprador = interesadoRepository.findById(req.getCoCompradorId())
+                    .orElseThrow(() -> new RuntimeException("Co-comprador (Interesado) no encontrado"));
+        }
+
         int diasValidez = (req.getDiasValidez() != null && req.getDiasValidez() > 0) ? req.getDiasValidez() : 7;
         LocalDate hoy = LocalDate.now();
 
@@ -59,6 +65,7 @@ public class CotizacionService {
                 .lote(lote)
                 .interesado(interesado)
                 .vendedor(vendedor)
+                .coComprador(coComprador)
                 // --- APLICAMOS LOS NUEVOS CAMPOS AQUÍ ---
                 .tipoInicial(req.getTipoInicial())
                 .cuotasFlexibles(req.getCuotasFlexibles() != null ? req.getCuotasFlexibles() : false)

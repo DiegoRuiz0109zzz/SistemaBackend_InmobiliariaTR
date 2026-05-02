@@ -11,7 +11,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -34,29 +33,43 @@ public class ContratoController {
         return ResponseEntity.ok(contratoService.obtenerPorId(id));
     }
 
-    // Endpoint 1: El Simulador que llama tu Frontend para pintar la tabla previa
     @PostMapping("/simular")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<CuotaPreview>> simular(@RequestBody SimulacionRequest request) {
         return ResponseEntity.ok(contratoService.simularCronograma(request));
     }
 
-    // Endpoint 2: Guardado real del Contrato y sus Cuotas
+    // 1. CREA EL CONTRATO EN BASE DE DATOS (Sin PDF todavía)
     @PostMapping("/")
     @PreAuthorize("hasAuthority('CREAR_CONTRATO')")
     public ResponseEntity<Contrato> crear(@RequestBody ContratoRequest request) {
         return ResponseEntity.ok(contratoService.generarContrato(request));
     }
 
-    @GetMapping("/{id}/imprimir")
+    // 2. ENDPOINT QUE GENERA EL PDF, EL HISTORIAL Y ACTUALIZA LA FECHA (Solo 1 vez por estado)
+    @PostMapping("/{id}/generar-documento")
+    @PreAuthorize("isAuthenticated()") // O el permiso que estés usando ('EDITAR_CONTRATO')
+    public ResponseEntity<?> generarDocumento(@PathVariable Long id) {
+        try {
+            // Ya no recibimos el nuevoEstado. El backend lo leerá solo.
+            String observacion = "Generación automática de documento oficial según el estado actual en BD.";
+            Contrato contratoActualizado = contratoService.generarNuevoDocumentoContrato(id, observacion);
+
+            return ResponseEntity.ok(contratoActualizado);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/{id}/vista-previa")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<byte[]> imprimirContrato(@PathVariable Long id) {
-        byte[] pdfBytes = contratoService.generarDocumentoPdf(id);
+    public ResponseEntity<byte[]> vistaPreviaContrato(@PathVariable Long id) {
+        byte[] pdfBytes = contratoService.generarVistaPreviaPdf(id);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_PDF);
-        // "inline" permite que se abra en el navegador en lugar de descargarse automáticamente
-        headers.setContentDispositionFormData("inline", "Documento_Contrato_" + id + ".pdf");
+        // "inline" permite que se abra en el navegador
+        headers.setContentDispositionFormData("inline", "Vista_Previa_Contrato_" + id + ".pdf");
         headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
 
         return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);

@@ -1,6 +1,7 @@
 package com.sistema.base.api.core.Financiamiento.Contrato;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.sistema.base.api.core.Financiamiento.Contrato.ContratoHistorial.ContratoHistorial;
 import com.sistema.base.api.core.Financiamiento.Cotizacion.Cotizacion;
 import com.sistema.base.api.core.Lotizacion.Lote.Lote;
 import com.sistema.base.api.core.Usuario.Clientes.Cliente;
@@ -13,6 +14,8 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Data
 @Builder
@@ -26,7 +29,6 @@ public class Contrato {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Relaciones
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "lote_id", nullable = false)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
@@ -52,11 +54,9 @@ public class Contrato {
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Cotizacion cotizacionOrigen;
 
-    // DATOS DEL CONTRATO
     @Column(nullable = false)
     private Double precioTotal;
 
-    // GESTION DE INICIAL
     @Column(nullable = false)
     private Double montoInicial;
 
@@ -82,17 +82,17 @@ public class Contrato {
     @Column(name = "cuotas_flexibles")
     private Boolean cuotasFlexibles;
 
-    // Fechas
     @Column(name="fecha_inicio_cronograma")
     private LocalDate fechaInicioCronograma;
 
+    // FECHA DE CONTRATO DINÁMICA (Se actualiza al generar el documento)
     @Column(name = "fecha_contrato")
-    private LocalDateTime fechaContrato;
+    private LocalDate fechaContrato;
 
-    @Column(name = "fecha_registro")
+    // FECHA DE CREACIÓN DEL REGISTRO
+    @Column(name = "fecha_registro", updatable = false)
     private LocalDateTime fechaRegistro;
 
-    // --- ESTADO Y AUDITORÍA ---
     @Enumerated(EnumType.STRING)
     @Column(name = "estado_contrato", length = 30)
     private EstadoContrato estadoContrato;
@@ -100,6 +100,12 @@ public class Contrato {
     @Builder.Default
     @Column(name = "enabled", nullable = false)
     private boolean enabled = true;
+
+    // RELACIÓN AL HISTORIAL DE DOCUMENTOS
+    @OneToMany(mappedBy = "contrato", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnoreProperties({"contrato", "hibernateLazyInitializer", "handler"})
+    @Builder.Default
+    private List<ContratoHistorial> historiales = new ArrayList<>();
 
     @PrePersist
     protected void onCreate() {

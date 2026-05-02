@@ -10,4 +10,6 @@ public interface ContratoHistorialRepository extends JpaRepository<ContratoHisto
 
     // Trae el historial de un contrato ordenado por fecha de registro (del más reciente al más antiguo)
     List<ContratoHistorial> findByContratoIdOrderByFechaRegistroDesc(Long contratoId);
+
+    boolean existsByContratoIdAndEstado(Long contratoId, String estado);
 }

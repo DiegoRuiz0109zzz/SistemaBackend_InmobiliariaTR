@@ -20,7 +20,6 @@ public class ContratoHistorialController {
 
     private final ContratoHistorialService contratoHistorialService;
 
-    // Obtener la "Línea de tiempo" de un contrato
     @GetMapping("/contrato/{contratoId}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<ContratoHistorial>> listarPorContrato(@PathVariable Long contratoId) {
@@ -33,12 +32,6 @@ public class ContratoHistorialController {
         return ResponseEntity.ok(contratoHistorialService.obtenerPorId(id));
     }
 
-    @PostMapping("/")
-    @PreAuthorize("hasAuthority('CREAR_HISTORIAL')") // Ajusta los permisos según tu esquema de roles
-    public ResponseEntity<ContratoHistorial> crear(@RequestBody ContratoHistorial contratoHistorial) {
-        return ResponseEntity.ok(contratoHistorialService.guardar(contratoHistorial));
-    }
-
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('ELIMINAR_HISTORIAL')")
     public ResponseEntity<Void> eliminar(@PathVariable Long id) {
@@ -46,9 +39,7 @@ public class ContratoHistorialController {
         return ResponseEntity.noContent().build();
     }
 
-    // =========================================================================
-    // ENDPOINT PARA VISUALIZAR EL PDF HISTÓRICO (La Ficha que se congeló en el tiempo)
-    // =========================================================================
+    // EL NAVEGADOR LLAMA A ESTE ENDPOINT PARA VER EL PDF INMUTABLE
     @GetMapping("/{id}/pdf")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Resource> verPdfHistorico(@PathVariable Long id) {
@@ -63,7 +54,7 @@ public class ContratoHistorialController {
                         .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + recurso.getFilename() + "\"")
                         .body(recurso);
             } else {
-                throw new RuntimeException("No se pudo leer o encontrar el archivo PDF en disco");
+                throw new RuntimeException("No se pudo leer el archivo PDF");
             }
         } catch (Exception e) {
             return ResponseEntity.internalServerError().build();
