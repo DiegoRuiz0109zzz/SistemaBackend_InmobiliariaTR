@@ -8,6 +8,7 @@ import java.time.LocalDate;
 public class ContratoRequest {
     private Long loteId;
     private Long clienteId;
+    private Long coCompradorId;
     private Long vendedorId;
 
     private Double precioTotal;

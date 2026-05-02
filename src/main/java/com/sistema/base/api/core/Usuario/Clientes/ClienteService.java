@@ -45,6 +45,7 @@ public class ClienteService {
         cliente.setProvincia(clienteRequest.getProvincia());
         cliente.setDistrito(clienteRequest.getDistrito());
         cliente.setUbigeo(clienteRequest.getUbigeo());
+        cliente.setEstadoCivil(clienteRequest.getEstadoCivil());
         cliente.setEnabled(clienteRequest.isEnabled());
 
         return clienteRepository.save(cliente);

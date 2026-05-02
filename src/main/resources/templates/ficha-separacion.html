@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <style>
+        /* CONFIGURACIÓN DE PÁGINA A4 */
+        @page {
+            size: A4;
+            margin-top: 130px;
+            margin-bottom: 100px;
+            margin-left: 2cm;
+            margin-right: 2cm;
+
+            @top-center { content: element(header); }
+            @bottom-center { content: element(footer); }
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            font-size: 10.5pt;
+            line-height: 1.4;
+            color: #000;
+            text-align: justify;
+        }
+
+        /* CABECERA Y PIE FULL BLEED */
+        div.header { position: running(header); width: 210mm; margin-left: -2cm; height: 130px; }
+        div.header img { width: 100%; height: 100%; display: block; }
+        div.footer { position: running(footer); width: 210mm; margin-left: -2cm; height: 100px; }
+        div.footer img { width: 100%; height: 100%; display: block; }
+
+        .watermark { position: fixed; top: 250px; left: 100px; z-index: -1; }
+        .watermark img { width: 500px; }
+
+        .uppercase-text { text-transform: uppercase; }
+        .title { font-size: 15pt; font-weight: bold; text-decoration: underline; text-align: center; margin-bottom: 20px; margin-top: 10px; }
+        .section-title { font-weight: bold; text-transform: uppercase; margin-top: 25px; display: block; margin-bottom: 10px; }
+
+        /* TABLA PRINCIPAL REDISEÑADA */
+        .data-table { width: 100%; border-collapse: collapse; }
+        .data-table td { padding: 6px 0; vertical-align: top; }
+        .label-col { width: 45%; }
+        .value-col { width: 55%; font-weight: bold; }
+
+        /* Tabulación para las fechas de separación */
+        .indent { padding-left: 25px; font-weight: normal; }
+
+        .note {
+            margin-top: 25px;
+            font-size: 8.5pt;
+            border: 1px solid #104A66;
+            border-radius: 6px;
+            padding: 10px 12px;
+            text-align: justify;
+            line-height: 1.3;
+        }
+
+        .emission-date { text-align: right; margin-top: 15px; font-size: 10pt; }
+
+        /* TABLA DE FIRMAS */
+        .signatures-table { width: 100%; margin-top: 60px; page-break-inside: avoid; table-layout: fixed; }
+        .signatures-table td { width: 50%; vertical-align: top; }
+        .sig-block { width: 80%; margin: 0 auto; text-align: center; }
+        .signature-line { border-top: 1px solid #000; padding-top: 5px; margin-bottom: 5px; font-size: 10pt; }
+        .sig-details { text-align: left; margin-top: 15px; font-size: 9.5pt; line-height: 1.3; }
+
+        .highlight { font-weight: bold; }
+        .underline { text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <img th:if="${imgCabecera != null}" th:src="${imgCabecera}" alt="Cabecera"/>
+</div>
+
+<div class="footer">
+    <img th:if="${imgPie != null}" th:src="${imgPie}" alt="Pie de pagina"/>
+</div>
+
+<div class="watermark">
+    <img th:if="${imgFondo != null}" th:src="${imgFondo}" alt="Marca de Agua"/>
+</div>
+
+<div class="title">FICHA DE SEPARACIÓN</div>
+
+<p>
+    POR EL PRESENTE DOCUMENTO, EL/LA SR.(A).
+    <span class="highlight uppercase-text" th:text="|${contrato.cliente.nombres} ${contrato.cliente.apellidos}|"></span>,
+    IDENTIFICADO(A) CON <span class="highlight">DNI: N° <span th:text="${contrato.cliente.numeroDocumento}"></span></span>,
+    DOMICILIADO(A) EN
+    <span class="highlight uppercase-text" th:if="${contrato.cliente.direccion != null}" th:text="${contrato.cliente.direccion}"></span>
+    <span class="highlight uppercase-text" th:unless="${contrato.cliente.direccion != null}">_________________</span>;
+
+    MANIFIESTA SU COMPROMISO DE DEPOSITAR UN TOTAL DE S/ <span class="highlight"><span th:text="${#numbers.formatDecimal(contrato.montoInicial, 1, 'COMMA', 2, 'POINT')}"></span> SOLES</span>,
+    POR CONCEPTO DE <span class="underline">SEPARACIÓN, COMPLETANDO LA CUOTA INICIAL</span> DEL LOTE N° <span class="highlight" th:text="${contrato.lote.numero}"></span>,
+    DE LA MZ. "<span class="highlight uppercase-text" th:text="${contrato.lote.manzana.nombre}"></span>",
+    CON UN ÁREA DE <span class="highlight uppercase-text" th:text="|${contrato.lote.area} M2|"></span>,
+    DEL PROYECTO DENOMINADO "<span class="highlight uppercase-text" th:text="${contrato.lote.manzana.etapa.urbanizacion.nombre}"></span>",
+    UBICADO EN PARTE DEL LOTE 8, ZONA TERRITORIO DE LA COMUNIDAD DE OLMOS, SECTOR OLMOS, DISTRITO DE OLMOS, PROVINCIA Y DEPARTAMENTO DE LAMBAYEQUE INSCRITO
+    EN LA PARTIDA ELECTRONICA NUMERO <span class="highlight"> 11290424 </span>, DE LA ZONA REGISTRAL NUMERO II – SEDE CHICLAYO.
+</p>
+
+<span class="section-title">VALORIZACION Y FINANCIAMIENTO:</span>
+<table class="data-table">
+    <tr>
+        <td class="label-col">1. PRECIO DEL LOTE DE TERRENO:</td>
+        <td class="value-col">S/ <span th:text="${#numbers.formatDecimal(contrato.saldoFinanciar + contrato.montoInicial, 1, 'COMMA', 2, 'POINT')}"></span></td>
+    </tr>
+    <tr>
+        <td class="label-col">2. TOTAL CUOTA INICIAL:</td>
+        <td class="value-col">S/ <span th:text="${#numbers.formatDecimal(contrato.montoInicial, 1, 'COMMA', 2, 'POINT')}"></span></td>
+    </tr>
+    <tr>
+        <td colspan="2" class="label-col">3. MONTO DE SEPARACION:</td>
+    </tr>
+    <!-- Primer Abono -->
+    <tr>
+        <td class="uppercase-text indent" th:text="|${#temporals.format(contrato.fechaContrato, 'dd MMMM yyyy')}:|"></td>
+        <td class="value-col">S/ <span th:text="${#numbers.formatDecimal(contrato.montoAbonadoIncial, 1, 'COMMA', 2, 'POINT')}"></span></td>
+    </tr>
+    <!-- Saldo Restante (Usando la variable fechaCuotaCero) -->
+    <tr th:if="${contrato.montoInicial > contrato.montoAbonadoIncial}">
+        <td class="uppercase-text indent">
+            <span th:if="${fechaCuotaCero != null}" th:text="|${#temporals.format(fechaCuotaCero, 'dd MMMM yyyy')}:|"></span>
+            <span th:unless="${fechaCuotaCero != null}">FECHA PENDIENTE:</span>
+        </td>
+        <td class="value-col">S/ <span th:text="${#numbers.formatDecimal(contrato.montoInicial - contrato.montoAbonadoIncial, 1, 'COMMA', 2, 'POINT')}"></span></td>
+    </tr>
+    <tr>
+        <td class="label-col">4. PLAZO DE FINANCIAMIENTO:</td>
+        <td class="value-col" th:text="|${contrato.cantidadCuotas} MESES|"></td>
+    </tr>
+</table>
+
+<div class="note">
+    <span class="highlight">NOTA: (1)</span> SI EN EL PLAZO DE <span class="highlight">15 (días)</span> DIAS CALENDARIOS DE HABER REALIZADO EL PAGO POR SEPARACION DE LOTE, EL CLIENTE INCUMPLE O DESISTE DE LA COMPRA, NO TENDRA DERECHO A RECLAMO O DEVOLUCION DEL PAGO.
+</div>
+
+<div class="emission-date uppercase-text">
+    OLMOS, <span th:text="${#temporals.format(contrato.fechaContrato, 'dd')}"></span> DE
+    <span th:text="${#temporals.format(contrato.fechaContrato, 'MMMM')}"></span> DEL
+    <span th:text="${#temporals.format(contrato.fechaContrato, 'yyyy')}"></span>.
+</div>
+
+<table class="signatures-table">
+    <tr>
+        <td>
+            <div class="sig-block">
+                <div class="signature-line">
+                    ASESOR DE VENTAS<br/>
+                    <span th:if="${contrato.vendedor != null}" class="highlight uppercase-text" th:text="|${contrato.vendedor.nombres} ${contrato.vendedor.apellidos}|"></span>
+                    <span th:unless="${contrato.vendedor != null}" class="highlight uppercase-text">_________________</span>
+                </div>
+                <div class="sig-details">
+                    CEL:
+                    <span th:if="${contrato.vendedor != null}" th:text="${contrato.vendedor.telefono}"></span>
+                </div>
+            </div>
+        </td>
+        <td>
+            <div class="sig-block">
+                <div class="signature-line">
+                    COMPRADOR (A)<br/>
+                    <span class="highlight uppercase-text" th:text="|${contrato.cliente.nombres} ${contrato.cliente.apellidos}|"></span><br/>
+                    DNI: <span class="highlight">N° <span th:text="${contrato.cliente.numeroDocumento}"></span></span>
+                </div>
+                <div class="sig-details">
+                    CEL:
+                    <span th:if="${contrato.cliente.telefono != null}" th:text="${contrato.cliente.telefono}"></span><br/>
+                    EMAIL:
+                    <span th:if="${contrato.cliente.email != null}" th:text="${contrato.cliente.email}"></span>
+                </div>
+            </div>
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>

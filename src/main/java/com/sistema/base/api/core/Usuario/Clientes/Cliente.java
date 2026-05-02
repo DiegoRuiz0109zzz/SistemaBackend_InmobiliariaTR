@@ -39,6 +39,9 @@ public class Cliente {
     private String telefono;
     private String email;
 
+    @Column(length = 20)
+    private String estadoCivil;
+
     @Column(nullable = false, length = 20)
     private String tipoDocumento;
 

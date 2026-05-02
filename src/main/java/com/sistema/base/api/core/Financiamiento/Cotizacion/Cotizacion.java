@@ -31,6 +31,12 @@ public class Cotizacion {
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Interesado interesado;
 
+    // NUEVO: EL CO-COMPRADOR (También es un Interesado en esta etapa)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "co_comprador_id", nullable = true)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    private Interesado coComprador;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "vendedor_id", nullable = false)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
@@ -52,13 +58,11 @@ public class Cotizacion {
     private Integer cuotasEspeciales;
     private Double montoCuotaEspecial;
 
-
     private Double montoCuotaCotizacion;
 
     @Column(nullable = false)
     private Double saldoFinanciar;
 
-    // EL NUEVO INTERRUPTOR DE CUOTAS FLEXIBLES
     @Column(name = "cuotas_flexibles")
     private Boolean cuotasFlexibles;
 

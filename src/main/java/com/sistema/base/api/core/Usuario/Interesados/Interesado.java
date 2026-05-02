@@ -26,11 +26,15 @@ public class Interesado {
     private String apellidos;
     private String telefono;
     private String email;
+    private String direccion;
 
     private String departamento;
     private String provincia;
     private String distrito;
     private String ubigeo;
+
+    @Column(length = 20)
+    private String estadoCivil;
 
     @Column(nullable = false, length = 20)
     private String tipoDocumento;
