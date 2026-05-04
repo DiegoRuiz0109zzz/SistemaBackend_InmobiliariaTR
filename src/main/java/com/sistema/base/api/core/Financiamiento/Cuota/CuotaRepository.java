@@ -1,5 +1,6 @@
 package com.sistema.base.api.core.Financiamiento.Cuota;
 
+import com.sistema.base.api.core.Dashboard.dtos.MensualChartDTO;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import org.springframework.data.jpa.repository.Query;
@@ -32,5 +33,5 @@ public interface CuotaRepository extends JpaRepository<Cuota, Long> {
            "AND (:etapaId IS NULL OR c.contrato.lote.manzana.etapa.id = :etapaId) " +
            "AND (:manzanaId IS NULL OR c.contrato.lote.manzana.id = :manzanaId) " +
            "GROUP BY MONTH(c.fechaVencimiento) ORDER BY MONTH(c.fechaVencimiento)")
-    List<com.sistema.base.api.core.Dashboard.dtos.MensualChartDTO> findProyeccionCobrosMensuales(@Param("anio") Integer anio, @Param("urbanizacionId") Long urbanizacionId, @Param("etapaId") Long etapaId, @Param("manzanaId") Long manzanaId);
+    List<MensualChartDTO> findProyeccionCobrosMensuales(@Param("anio") Integer anio, @Param("urbanizacionId") Long urbanizacionId, @Param("etapaId") Long etapaId, @Param("manzanaId") Long manzanaId);
 }
