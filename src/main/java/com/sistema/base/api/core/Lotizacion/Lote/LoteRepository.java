@@ -1,5 +1,6 @@
 package com.sistema.base.api.core.Lotizacion.Lote;
 
+import com.sistema.base.api.core.Dashboard.dtos.MensualChartDTO;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -39,4 +40,13 @@ public interface LoteRepository extends JpaRepository<Lote, Long> {
            "AND (:etapaId IS NULL OR l.manzana.etapa.id = :etapaId) " +
            "AND (:manzanaId IS NULL OR l.manzana.id = :manzanaId)")
     Double sumValorLotesByEstado(@Param("estado") EstadoLote estado, @Param("urbanizacionId") Long urbanizacionId, @Param("etapaId") Long etapaId, @Param("manzanaId") Long manzanaId);
+
+    @Query("SELECT new com.sistema.base.api.core.Dashboard.dtos.MensualChartDTO(" +
+            "CAST(MONTH(c.fechaContrato) AS string), COUNT(c), SUM(c.precioTotal)) " +
+            "FROM Contrato c WHERE YEAR(c.fechaContrato) = :anio AND " +
+            "(:urbId IS NULL OR c.lote.manzana.etapa.urbanizacion.id = :urbId) AND " +
+            "(:etapaId IS NULL OR c.lote.manzana.etapa.id = :etapaId) AND " +
+            "(:manzId IS NULL OR c.lote.manzana.id = :manzId) " +
+            "GROUP BY MONTH(c.fechaContrato)")
+    List<MensualChartDTO> findVentasMensuales(Integer anio, Long urbId, Long etapaId, Long manzId);
 }

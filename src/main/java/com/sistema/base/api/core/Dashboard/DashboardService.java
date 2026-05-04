@@ -25,24 +25,24 @@ public class DashboardService {
             anio = java.time.LocalDate.now().getYear();
         }
 
-        // Lotes
-        Long totalLotes = loteRepository.countTotalLotes(urbanizacionId, etapaId, manzanaId);
-        Long lotesVendidos = loteRepository.countLotesByEstado(EstadoLote.VENDIDO, urbanizacionId, etapaId, manzanaId);
-        Long lotesDisponibles = loteRepository.countLotesByEstado(EstadoLote.DISPONIBLE, urbanizacionId, etapaId, manzanaId);
+        // Lotes (Usando métodos seguros para evitar caídas del servidor)
+        Long totalLotes = safeLong(loteRepository.countTotalLotes(urbanizacionId, etapaId, manzanaId));
+        Long lotesVendidos = safeLong(loteRepository.countLotesByEstado(EstadoLote.VENDIDO, urbanizacionId, etapaId, manzanaId));
+        Long lotesDisponibles = safeLong(loteRepository.countLotesByEstado(EstadoLote.DISPONIBLE, urbanizacionId, etapaId, manzanaId));
 
-        Double valorTotal = loteRepository.sumValorTotalLotes(urbanizacionId, etapaId, manzanaId);
-        Double valorVendido = loteRepository.sumValorLotesByEstado(EstadoLote.VENDIDO, urbanizacionId, etapaId, manzanaId);
-        Double valorDisponible = loteRepository.sumValorLotesByEstado(EstadoLote.DISPONIBLE, urbanizacionId, etapaId, manzanaId);
-        Double valorReservado = loteRepository.sumValorLotesByEstado(EstadoLote.RESERVADO, urbanizacionId, etapaId, manzanaId);
-        
+        Double valorTotal = safeDouble(loteRepository.sumValorTotalLotes(urbanizacionId, etapaId, manzanaId));
+        Double valorVendido = safeDouble(loteRepository.sumValorLotesByEstado(EstadoLote.VENDIDO, urbanizacionId, etapaId, manzanaId));
+        Double valorDisponible = safeDouble(loteRepository.sumValorLotesByEstado(EstadoLote.DISPONIBLE, urbanizacionId, etapaId, manzanaId));
+        Double valorReservado = safeDouble(loteRepository.sumValorLotesByEstado(EstadoLote.RESERVADO, urbanizacionId, etapaId, manzanaId));
+
         Double valorPotencial = valorDisponible + valorReservado;
 
-        Double porcentajeVentasCantidad = (totalLotes != null && totalLotes > 0) ? (lotesVendidos * 100.0 / totalLotes) : 0.0;
-        Double porcentajeVentasMonto = (valorTotal != null && valorTotal > 0) ? (valorVendido * 100.0 / valorTotal) : 0.0;
+        Double porcentajeVentasCantidad = (totalLotes > 0) ? (lotesVendidos * 100.0 / totalLotes) : 0.0;
+        Double porcentajeVentasMonto = (valorTotal > 0) ? (valorVendido * 100.0 / valorTotal) : 0.0;
 
         // Financieros
-        Double totalCobrado = cuotaRepository.sumMontoPagado(urbanizacionId, etapaId, manzanaId);
-        Double totalPorCobrar = cuotaRepository.sumMontoPorCobrar(urbanizacionId, etapaId, manzanaId);
+        Double totalCobrado = safeDouble(cuotaRepository.sumMontoPagado(urbanizacionId, etapaId, manzanaId));
+        Double totalPorCobrar = safeDouble(cuotaRepository.sumMontoPorCobrar(urbanizacionId, etapaId, manzanaId));
         Double totalFinanciero = totalCobrado + totalPorCobrar;
         Double porcentajeRecaudacion = (totalFinanciero > 0) ? (totalCobrado * 100.0 / totalFinanciero) : 0.0;
 
@@ -81,9 +81,18 @@ public class DashboardService {
                     .filter(d -> d.getMes() != null && d.getMes().equals(String.valueOf(monthStr)))
                     .findFirst()
                     .orElse(new MensualChartDTO(String.valueOf(i), 0L, 0.0));
-            
+
             result.add(new MensualChartDTO(meses[i - 1], dto.getCantidadContratos(), dto.getMontoVendido()));
         }
         return result;
+    }
+
+    // --- MÉTODOS DE SEGURIDAD (Evitan el NullPointerException) ---
+    private Double safeDouble(Double value) {
+        return value != null ? value : 0.0;
+    }
+
+    private Long safeLong(Long value) {
+        return value != null ? value : 0L;
     }
 }
