@@ -17,6 +17,7 @@ public class DashboardController {
     private final DashboardService dashboardService;
 
     @GetMapping
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<DashboardResponseDTO> getDashboard(
             @RequestParam(required = false) Long urbanizacionId,
             @RequestParam(required = false) Long etapaId,
