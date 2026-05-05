@@ -3,6 +3,7 @@ package com.sistema.base.api.core.Financiamiento.Contrato.dtos;
 import com.sistema.base.api.core.Financiamiento.Contrato.TipoInicial;
 import lombok.Data;
 import java.time.LocalDate;
+import java.util.List;
 
 @Data
 public class ContratoRequest {
@@ -30,4 +31,6 @@ public class ContratoRequest {
 
     // NUEVO: Observación manual del vendedor
     private String observacion;
+
+    private List<BloqueCuotaDTO> bloquesFlexibles;
 }

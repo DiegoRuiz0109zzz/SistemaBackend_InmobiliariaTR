@@ -35,8 +35,41 @@ public class ContratoController {
 
     @PostMapping("/simular")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<List<CuotaPreview>> simular(@RequestBody SimulacionRequest request) {
-        return ResponseEntity.ok(contratoService.simularCronograma(request));
+    public ResponseEntity<?> simular(@RequestBody SimulacionRequest request) {
+        try {
+            List<CuotaPreview> cronograma = contratoService.simularCronograma(request);
+            return ResponseEntity.ok(cronograma);
+        } catch (IllegalArgumentException e) {
+            // Capturamos el error inteligente que armamos en el Service
+            // y lo devolvemos como un 400 Bad Request en formato JSON
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            // Para cualquier otro error inesperado
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Ocurrió un error inesperado durante la simulación."));
+        }
+    }
+
+    @PostMapping("/simular/resumen")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> simularResumen(@RequestBody SimulacionRequest request) {
+        try {
+            Map<String, Object> resumen = contratoService.calcularResumenSimulacion(request);
+            // Respondemos 200 OK con exito = true
+            return ResponseEntity.ok(Map.of(
+                    "exito", true,
+                    "datos", resumen
+            ));
+        } catch (IllegalArgumentException e) {
+            // Respondemos 200 OK, pero con exito = false y el mensaje de alerta
+            return ResponseEntity.ok(Map.of(
+                    "exito", false,
+                    "mensaje", e.getMessage()
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("exito", false, "mensaje", "Error crítico en el servidor."));
+        }
     }
 
     // 1. CREA EL CONTRATO EN BASE DE DATOS (Sin PDF todavía)

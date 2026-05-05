@@ -55,8 +55,8 @@ public class Cotizacion {
     @Column(nullable = false)
     private Integer cantidadCuotas;
 
-    private Integer cuotasEspeciales;
-    private Double montoCuotaEspecial;
+    @Column(name = "detalle_tramos", length = 1000)
+    private String detalleTramos;
 
     private Double montoCuotaCotizacion;
 

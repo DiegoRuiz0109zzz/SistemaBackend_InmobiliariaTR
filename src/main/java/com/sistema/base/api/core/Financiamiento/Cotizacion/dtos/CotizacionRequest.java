@@ -1,7 +1,10 @@
 package com.sistema.base.api.core.Financiamiento.Cotizacion.dtos;
 
 import com.sistema.base.api.core.Financiamiento.Contrato.TipoInicial;
+import com.sistema.base.api.core.Financiamiento.Contrato.dtos.BloqueCuotaDTO;
 import lombok.Data;
+
+import java.util.List;
 
 @Data
 public class CotizacionRequest {
@@ -25,4 +28,6 @@ public class CotizacionRequest {
     private Double montoCuotaEspecial;
 
     private Integer diasValidez; // Ej: 7
+
+    private List<BloqueCuotaDTO> bloquesFlexibles;
 }

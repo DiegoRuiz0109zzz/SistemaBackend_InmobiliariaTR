@@ -4,6 +4,7 @@ import com.sistema.base.api.core.Empresa.Empresa;
 import com.sistema.base.api.core.Empresa.EmpresaRepository;
 import com.sistema.base.api.core.Financiamiento.Contrato.ContratoHistorial.ContratoHistorial;
 import com.sistema.base.api.core.Financiamiento.Contrato.ContratoHistorial.ContratoHistorialRepository;
+import com.sistema.base.api.core.Financiamiento.Contrato.dtos.BloqueCuotaDTO;
 import com.sistema.base.api.core.Financiamiento.Contrato.dtos.ContratoRequest;
 import com.sistema.base.api.core.Financiamiento.Contrato.dtos.CuotaPreview;
 import com.sistema.base.api.core.Financiamiento.Contrato.dtos.SimulacionRequest;
@@ -39,6 +40,7 @@ import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -55,41 +57,164 @@ public class ContratoService {
     private final ContratoHistorialRepository contratoHistorialRepository;
     private final TemplateEngine templateEngine;
 
+    // ==========================================
+    // 1. EL SIMULADOR (Modo Exclusivo por Tramos)
+    // ==========================================
     public List<CuotaPreview> simularCronograma(SimulacionRequest request) {
-        List<CuotaPreview> cronograma = new ArrayList<>();
         Double saldoFinanciar = request.getPrecioTotal() - request.getMontoInicial();
-        if (saldoFinanciar <= 0 || request.getCantidadCuotas() <= 0) return cronograma;
-        int cuotasTotales = request.getCantidadCuotas();
-        int cuotasEspeciales = (request.getCuotasEspeciales() != null) ? request.getCuotasEspeciales() : 0;
-        Double montoEspecial = (request.getMontoCuotaEspecial() != null) ? request.getMontoCuotaEspecial() : 0.0;
-        Double saldoRestante = saldoFinanciar;
-        if (cuotasEspeciales > 0 && montoEspecial > 0) { saldoRestante -= (cuotasEspeciales * montoEspecial); }
-        int cuotasNormales = cuotasTotales - cuotasEspeciales;
-        Double cuotaBase = (cuotasNormales > 0) ? Math.round((saldoRestante / cuotasNormales) * 100.0) / 100.0 : 0.0;
+        if (saldoFinanciar <= 0) {
+            throw new IllegalArgumentException("El saldo a financiar debe ser mayor a 0.");
+        }
+
+        // Si no manda bloques, inicializamos una lista vacía para auto-completar todo
+        List<BloqueCuotaDTO> bloques = request.getBloquesFlexibles();
+        if (bloques == null) {
+            bloques = new ArrayList<>();
+        }
+
+        List<CuotaPreview> cronograma = new ArrayList<>();
+        double totalProgramado = 0.0;
+        int totalCuotasProgramadas = 0;
+
+        // 1. Sumamos lo que el vendedor SÍ ingresó manualmente
+        for (BloqueCuotaDTO bloque : bloques) {
+            if (bloque.getCantidad() <= 0 || bloque.getMonto() <= 0) {
+                throw new IllegalArgumentException("La cantidad y el monto de cada tramo deben ser mayores a 0.");
+            }
+            totalProgramado += (bloque.getCantidad() * bloque.getMonto());
+            totalCuotasProgramadas += bloque.getCantidad();
+        }
+
+        totalProgramado = Math.round(totalProgramado * 100.0) / 100.0;
+        double diferencia = Math.round((saldoFinanciar - totalProgramado) * 100.0) / 100.0;
+
+        // 🔥 LA MAGIA: AUTO-COMPLETADO INTELIGENTE
+        if (diferencia > 0) {
+            int cuotasRestantes = (request.getCantidadCuotas() != null ? request.getCantidadCuotas() : 0) - totalCuotasProgramadas;
+
+            if (cuotasRestantes > 0) {
+                // Calculamos de cuánto debe ser la cuota para rellenar el hueco
+                double montoAuto = Math.round((diferencia / cuotasRestantes) * 100.0) / 100.0;
+
+                BloqueCuotaDTO bloqueAuto = new BloqueCuotaDTO();
+                bloqueAuto.setCantidad(cuotasRestantes);
+                bloqueAuto.setMonto(montoAuto);
+                bloqueAuto.setTipo("MENSUAL"); // El relleno siempre será mensual normal
+
+                // Hacemos la lista modificable y le agregamos el bloque automático
+                bloques = new ArrayList<>(bloques);
+                bloques.add(bloqueAuto);
+
+                // Actualizamos el request para que si otra función lo usa, tenga el tramo completo
+                request.setBloquesFlexibles(bloques);
+
+            } else {
+                throw new IllegalArgumentException("El monto programado no cubre la deuda y ya no quedan cuotas disponibles para auto-completar.");
+            }
+        } else if (diferencia < 0) {
+            throw new IllegalArgumentException(String.format("Te has excedido por S/ %.2f. Revisa los tramos ingresados.", Math.abs(diferencia)));
+        } else if (diferencia == 0 && request.getCantidadCuotas() != null && totalCuotasProgramadas < request.getCantidadCuotas()) {
+            throw new IllegalArgumentException("La deuda está cubierta, pero sobran " + (request.getCantidadCuotas() - totalCuotasProgramadas) + " cuotas en el plazo solicitado.");
+        }
+
+        // 2. Generar el cronograma iterando bloque por bloque (incluyendo el auto-generado)
         LocalDate fechaInicial = request.getFechaInicioPago();
         int diaPreferido = fechaInicial.getDayOfMonth();
         YearMonth mesActual = YearMonth.from(fechaInicial);
-        for (int i = 0; i < cuotasTotales; i++) {
-            Double montoAsignado = (i < cuotasEspeciales) ? montoEspecial : cuotaBase;
-            if (i == cuotasTotales - 1 && cuotasNormales > 0) {
-                Double totalEspeciales = cuotasEspeciales * montoEspecial;
-                Double totalNormales = cuotaBase * (cuotasNormales - 1);
-                montoAsignado = Math.round((saldoFinanciar - totalEspeciales - totalNormales) * 100.0) / 100.0;
+        int numeroCuotaGlobal = 1;
+
+        for (int b = 0; b < bloques.size(); b++) {
+            BloqueCuotaDTO bloque = bloques.get(b);
+            TipoCuota tipoAsignado = (bloque.getTipo() != null && bloque.getTipo().equalsIgnoreCase("ESPECIAL"))
+                    ? TipoCuota.ESPECIAL : TipoCuota.MENSUAL;
+
+            for (int i = 0; i < bloque.getCantidad(); i++) {
+                double montoAsignado = bloque.getMonto();
+
+                // 🔥 AJUSTE PERFECTO AL CÉNTIMO: En la última cuota del último bloque
+                if (b == bloques.size() - 1 && i == bloque.getCantidad() - 1) {
+                    double sumaAnterior = 0.0;
+                    for(CuotaPreview cp : cronograma) sumaAnterior += cp.getMonto();
+                    montoAsignado = Math.round((saldoFinanciar - sumaAnterior) * 100.0) / 100.0;
+                }
+
+                YearMonth mesCuota = mesActual.plusMonths(numeroCuotaGlobal - 1);
+                int diaReal = Math.min(diaPreferido, mesCuota.lengthOfMonth());
+                LocalDate fechaVencimiento = mesCuota.atDay(diaReal);
+
+                cronograma.add(CuotaPreview.builder()
+                        .numeroCuota(numeroCuotaGlobal)
+                        .monto(montoAsignado)
+                        .fechaVencimiento(fechaVencimiento)
+                        .tipoCuota(tipoAsignado)
+                        .build());
+
+                numeroCuotaGlobal++;
             }
-            YearMonth mesCuota = mesActual.plusMonths(i);
-            int diaReal = Math.min(diaPreferido, mesCuota.lengthOfMonth());
-            LocalDate fechaVencimiento = mesCuota.atDay(diaReal);
-            cronograma.add(CuotaPreview.builder().numeroCuota(i + 1).monto(montoAsignado).fechaVencimiento(fechaVencimiento).build());
         }
         return cronograma;
     }
 
+    // ==========================================
+    // 2. EL PRE-CÁLCULO (Resumen Simplificado)
+    // ==========================================
+    public Map<String, Object> calcularResumenSimulacion(SimulacionRequest request) {
+        Double saldoFinanciar = request.getPrecioTotal() - request.getMontoInicial();
+
+        double totalProgramado = 0.0;
+        int totalCuotasProgramadas = 0;
+
+        if (request.getBloquesFlexibles() != null) {
+            for (BloqueCuotaDTO bloque : request.getBloquesFlexibles()) {
+                if (bloque.getCantidad() != null && bloque.getMonto() != null) {
+                    totalProgramado += (bloque.getCantidad() * bloque.getMonto());
+                    totalCuotasProgramadas += bloque.getCantidad();
+                }
+            }
+        }
+
+        totalProgramado = Math.round(totalProgramado * 100.0) / 100.0;
+        double diferenciaReal = Math.round((saldoFinanciar - totalProgramado) * 100.0) / 100.0;
+
+        // Variables clave
+        boolean excede = diferenciaReal < 0;
+        double diferenciaAbsoluta = Math.abs(diferenciaReal); // Siempre positivo para no confundir al frontend
+        String recomendacion = "";
+
+        // Lógica de recomendación
+        if (diferenciaReal > 0) {
+            if (request.getCantidadCuotas() != null && request.getCantidadCuotas() > totalCuotasProgramadas) {
+                int cuotasRestantes = request.getCantidadCuotas() - totalCuotasProgramadas;
+                double cuotaSugerida = Math.round((diferenciaReal / cuotasRestantes) * 100.0) / 100.0;
+                recomendacion = String.format("Faltan S/ %.2f. 💡 Sugerencia: Agrega %d cuotas de S/ %.2f", diferenciaAbsoluta, cuotasRestantes, cuotaSugerida);
+            } else {
+                recomendacion = String.format("Faltan S/ %.2f. 💡 Sugerencia: Agrega 1 cuota final de S/ %.2f", diferenciaAbsoluta, diferenciaAbsoluta);
+            }
+        } else if (excede) {
+            recomendacion = String.format("⚠️ Te has excedido por S/ %.2f. Reduce el monto o la cantidad de los tramos.", diferenciaAbsoluta);
+        } else {
+            recomendacion = "✅ ¡Perfecto! Los tramos cubren la deuda exacta.";
+        }
+
+        // Armamos el JSON final solo con lo que pediste
+        Map<String, Object> resumen = new java.util.HashMap<>();
+        resumen.put("diferencia", diferenciaAbsoluta);
+        resumen.put("excede", excede);
+        resumen.put("recomendacion", recomendacion);
+
+        return resumen;
+    }
+
+    // ==========================================
+    // 3. GENERAR EL CONTRATO REAL EN BASE DE DATOS
+    // ==========================================
     @Transactional
     public Contrato generarContrato(ContratoRequest req) {
 
         Lote lote = loteRepository.findById(req.getLoteId()).orElseThrow(() -> new RuntimeException("El lote no existe."));
         if (lote.getEstadoVenta() == EstadoLote.VENDIDO) throw new RuntimeException("Lote vendido.");
         Cliente cliente = clienteRepository.findById(req.getClienteId()).orElseThrow(() -> new RuntimeException("Cliente no existe."));
+
         Cliente coComprador = null;
         if (req.getCoCompradorId() != null) {
             coComprador = clienteRepository.findById(req.getCoCompradorId()).orElseThrow(() -> new RuntimeException("Co-comprador no existe."));
@@ -99,13 +224,26 @@ public class ContratoService {
         if (req.getCotizacionId() != null) cotizacion = cotizacionRepository.findById(req.getCotizacionId()).orElse(null);
 
         Double saldoFinanciar = req.getPrecioTotal() - req.getMontoInicialAcordado();
-        StringBuilder descBuilder = new StringBuilder();
-        descBuilder.append("Cuota Inicial de S/ ").append(req.getMontoInicialAcordado()).append(". ");
-        if (req.getCuotasEspeciales() != null && req.getCuotasEspeciales() > 0) {
-            descBuilder.append("Fraccionado en ").append(req.getCuotasEspeciales()).append(" cuotas de S/ ").append(req.getMontoCuotaEspecial())
-                    .append(" y ").append(req.getCantidadCuotas() - req.getCuotasEspeciales()).append(" cuotas con el saldo restante.");
+
+        // --- AUDITORÍA DE TRAMOS ---
+        String textoTramos = "Estándar";
+        int totalCuotasGeneradas = 0;
+
+        if (req.getBloquesFlexibles() != null && !req.getBloquesFlexibles().isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < req.getBloquesFlexibles().size(); i++) {
+                var b = req.getBloquesFlexibles().get(i);
+                sb.append(b.getCantidad()).append(" de S/").append(b.getMonto());
+                if (i < req.getBloquesFlexibles().size() - 1) {
+                    sb.append(" | ");
+                }
+                totalCuotasGeneradas += b.getCantidad();
+            }
+            textoTramos = sb.toString();
         } else {
-            descBuilder.append("Fraccionado en ").append(req.getCantidadCuotas()).append(" cuotas regulares.");
+            // SI EL FRONTEND NO MANDA TRAMOS (ES OPCIONAL), USAMOS LA CONFIGURACIÓN ESTÁNDAR
+            textoTramos = "Cronograma regular de " + req.getCantidadCuotas() + " cuotas";
+            totalCuotasGeneradas = (req.getCantidadCuotas() != null) ? req.getCantidadCuotas() : 0;
         }
 
         Double abonoInicialPrometido = (req.getAbonoInicialReal() != null) ? req.getAbonoInicialReal() : 0.0;
@@ -118,16 +256,20 @@ public class ContratoService {
         Contrato contrato = Contrato.builder()
                 .lote(lote).cliente(cliente).coComprador(coComprador).vendedor(vendedor).cotizacionOrigen(cotizacion)
                 .precioTotal(req.getPrecioTotal()).montoInicial(req.getMontoInicialAcordado())
-                .montoAbonadoIncial(abonoInicialPrometido).saldoFinanciar(saldoFinanciar).cantidadCuotas(req.getCantidadCuotas())
-                .descripcion(descBuilder.toString()).observacion(req.getObservacion()).tipoInicial(req.getTipoInicial())
+                .montoAbonadoIncial(abonoInicialPrometido).saldoFinanciar(saldoFinanciar)
+                .cantidadCuotas(totalCuotasGeneradas) // Tomamos el total sumado de los tramos
+                .detalleTramos(textoTramos) // GUARDAMOS EL RESUMEN DEL CRONOGRAMA
+                .descripcion("Cuota inicial de S/ " + req.getMontoInicialAcordado() + ". Fraccionado en tramos: " + textoTramos)
+                .observacion(req.getObservacion()).tipoInicial(req.getTipoInicial())
                 .cuotasFlexibles(req.getCuotasFlexibles() != null ? req.getCuotasFlexibles() : false)
                 .fechaInicioCronograma(req.getFechaInicioPago())
                 .estadoContrato(estadoContratoReal)
-                .fechaContrato(null) // Nace en null, se actualiza al generar el documento
+                .fechaContrato(null)
                 .build();
 
         Contrato contratoGuardado = contratoRepository.save(contrato);
 
+        // --- CREAR CUOTA INICIAL (CUOTA 0) ---
         Cuota cuota0 = Cuota.builder().contrato(contratoGuardado).numeroCuota(0).tipoCuota(TipoCuota.INICIAL)
                 .montoTotal(req.getMontoInicialAcordado()).montoPagado(0.0)
                 .fechaVencimiento((req.getFechaLimiteInicial() != null) ? req.getFechaLimiteInicial() : LocalDate.now())
@@ -140,21 +282,32 @@ public class ContratoService {
             pagoRepository.save(pagoPendiente);
         }
 
-        if (saldoFinanciar > 0 && req.getCantidadCuotas() > 0) {
+        // --- GENERAR CRONOGRAMA REUTILIZANDO EL SIMULADOR ---
+        if (saldoFinanciar > 0) {
             SimulacionRequest sim = new SimulacionRequest();
-            sim.setPrecioTotal(req.getPrecioTotal()); sim.setMontoInicial(req.getMontoInicialAcordado());
-            sim.setCantidadCuotas(req.getCantidadCuotas()); sim.setFechaInicioPago(req.getFechaInicioPago());
-            sim.setCuotasEspeciales(req.getCuotasEspeciales()); sim.setMontoCuotaEspecial(req.getMontoCuotaEspecial());
+            sim.setPrecioTotal(req.getPrecioTotal());
+            sim.setMontoInicial(req.getMontoInicialAcordado());
+            sim.setFechaInicioPago(req.getFechaInicioPago());
+            sim.setBloquesFlexibles(req.getBloquesFlexibles());
 
+            // 🔥 ESTA ES LA LÍNEA QUE NOS FALTABA AÑADIR 🔥
+            sim.setCantidadCuotas(req.getCantidadCuotas());
+
+            // ¡LLAMADA MAGISTRAL! Aprovechamos el método que ya hace los cálculos de fechas
             List<CuotaPreview> proyeccion = simularCronograma(sim);
+
             List<Cuota> cuotasAGuardar = new ArrayList<>();
-            int cantidadEspeciales = (req.getCuotasEspeciales() != null) ? req.getCuotasEspeciales() : 0;
 
             for (CuotaPreview cp : proyeccion) {
-                TipoCuota tipoDeCuota = (cp.getNumeroCuota() <= cantidadEspeciales) ? TipoCuota.ESPECIAL : TipoCuota.MENSUAL;
-                cuotasAGuardar.add(Cuota.builder().contrato(contratoGuardado).numeroCuota(cp.getNumeroCuota())
-                        .tipoCuota(tipoDeCuota).montoTotal(cp.getMonto()).montoPagado(0.0)
-                        .fechaVencimiento(cp.getFechaVencimiento()).estado(EstadoCuota.PENDIENTE).build());
+                cuotasAGuardar.add(Cuota.builder()
+                        .contrato(contratoGuardado)
+                        .numeroCuota(cp.getNumeroCuota())
+                        .tipoCuota(cp.getTipoCuota())
+                        .montoTotal(cp.getMonto())
+                        .montoPagado(0.0)
+                        .fechaVencimiento(cp.getFechaVencimiento())
+                        .estado(EstadoCuota.PENDIENTE)
+                        .build());
             }
             cuotaRepository.saveAll(cuotasAGuardar);
         }
@@ -164,7 +317,7 @@ public class ContratoService {
             cotizacionRepository.save(cotizacion);
         }
 
-        return contratoGuardado; // Retorna sin generar PDF ni historial.
+        return contratoGuardado;
     }
 
     // =========================================================================

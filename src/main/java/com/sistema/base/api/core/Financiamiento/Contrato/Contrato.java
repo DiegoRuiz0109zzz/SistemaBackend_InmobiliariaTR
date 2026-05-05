@@ -82,6 +82,9 @@ public class Contrato {
     @Column(name = "cuotas_flexibles")
     private Boolean cuotasFlexibles;
 
+    @Column(name = "detalle_tramos", length = 1000)
+    private String detalleTramos;
+
     @Column(name="fecha_inicio_cronograma")
     private LocalDate fechaInicioCronograma;
 

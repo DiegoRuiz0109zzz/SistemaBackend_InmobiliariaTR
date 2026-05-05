@@ -61,19 +61,34 @@ public class CotizacionService {
         int diasValidez = (req.getDiasValidez() != null && req.getDiasValidez() > 0) ? req.getDiasValidez() : 7;
         LocalDate hoy = LocalDate.now();
 
+        // --- CONVERTIR LOS BLOQUES EN UN STRING PARA GUARDARLO ---
+        String textoTramos = "Estándar";
+        if (req.getBloquesFlexibles() != null && !req.getBloquesFlexibles().isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < req.getBloquesFlexibles().size(); i++) {
+                var b = req.getBloquesFlexibles().get(i);
+                sb.append(b.getCantidad()).append(" de S/").append(b.getMonto());
+                if (i < req.getBloquesFlexibles().size() - 1) {
+                    sb.append(" | "); // Separador entre tramos
+                }
+            }
+            textoTramos = sb.toString();
+        }
+
         Cotizacion cotizacion = Cotizacion.builder()
                 .lote(lote)
                 .interesado(interesado)
                 .vendedor(vendedor)
                 .coComprador(coComprador)
-                // --- APLICAMOS LOS NUEVOS CAMPOS AQUÍ ---
                 .tipoInicial(req.getTipoInicial())
                 .cuotasFlexibles(req.getCuotasFlexibles() != null ? req.getCuotasFlexibles() : false)
                 .precioTotal(req.getPrecioTotal())
                 .montoInicialAcordado(req.getMontoInicialAcordado())
                 .cantidadCuotas(req.getCantidadCuotas())
-                .cuotasEspeciales(req.getCuotasEspeciales())
-                .montoCuotaEspecial(req.getMontoCuotaEspecial())
+
+                // GUARDAMOS EL TEXTO EN LUGAR DE LAS VARIABLES VIEJAS
+                .detalleTramos(textoTramos)
+
                 .montoCuotaCotizacion(req.getMontoCuotaCotizacion())
                 .saldoFinanciar(req.getSaldoFinanciar())
                 .fechaCotizacion(hoy)
