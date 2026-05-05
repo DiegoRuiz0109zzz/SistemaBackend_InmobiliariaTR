@@ -8,6 +8,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 
 @Data
 @Builder
@@ -35,6 +36,23 @@ public class Cuota {
 
     @Column(nullable = false)
     private Double montoTotal;
+
+    // Este campo no se creará en la base de datos, se calcula al vuelo
+    @Transient
+    private Integer diasVencidos;
+
+    // Método que puedes llamar o que Jackson serializará automáticamente (si le pones getter)
+    public Integer getDiasVencidos() {
+        if (this.fechaVencimiento != null &&
+                (this.estado == EstadoCuota.PENDIENTE || this.estado == EstadoCuota.PAGADO_PARCIAL || this.estado == EstadoCuota.VENCIDO)) {
+
+            LocalDate hoy = LocalDate.now();
+            if (hoy.isAfter(this.fechaVencimiento)) {
+                return (int) ChronoUnit.DAYS.between(this.fechaVencimiento, hoy);
+            }
+        }
+        return 0;
+    }
 
     @Builder.Default
     @Column(nullable = false)

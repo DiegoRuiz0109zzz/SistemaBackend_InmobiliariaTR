@@ -6,6 +6,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Repository
@@ -35,4 +36,7 @@ public interface CuotaRepository extends JpaRepository<Cuota, Long> {
             "(:manzId IS NULL OR c.contrato.lote.manzana.id = :manzId) " +
             "GROUP BY EXTRACT(MONTH FROM c.fechaVencimiento)")
     List<MensualChartDTO> findProyeccionCobrosMensuales(Integer anio, Long urbId, Long etapaId, Long manzId);
+
+    @Query("SELECT c FROM Cuota c WHERE c.enabled = true AND c.estado IN :estados AND c.fechaVencimiento < :fecha")
+    List<Cuota> findByEstadoInAndFechaVencimientoBefore(@Param("estados") List<EstadoCuota> estados, @Param("fecha") LocalDate fecha);
 }

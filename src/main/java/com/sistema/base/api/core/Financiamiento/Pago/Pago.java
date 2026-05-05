@@ -38,6 +38,14 @@ public class Pago {
     @Column(length = 100)
     private String numeroOperacion;
 
+    @Column(name = "dias_retraso")
+    @Builder.Default
+    private Integer diasRetraso = 0;
+
+    @Column(name = "pago_a_destiempo")
+    @Builder.Default
+    private boolean pagoADestiempo = false;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default
