@@ -71,6 +71,7 @@ public class CotizacionService {
                 .cuotasFlexibles(req.getCuotasFlexibles() != null ? req.getCuotasFlexibles() : false)
                 .precioTotal(req.getPrecioTotal())
                 .montoInicialAcordado(req.getMontoInicialAcordado())
+                .montoAbonadoIncial(req.getMontoAbonadoIncial())
                 .cantidadCuotas(req.getCantidadCuotas())
                 .cuotasEspeciales(req.getCuotasEspeciales())
                 .montoCuotaEspecial(req.getMontoCuotaEspecial())
