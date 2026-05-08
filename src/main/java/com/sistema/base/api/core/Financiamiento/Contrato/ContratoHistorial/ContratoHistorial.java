@@ -24,23 +24,28 @@ public class ContratoHistorial {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "contrato_id", nullable = false)
-    @JsonIgnoreProperties({"historiales", "hibernateLazyInitializer", "handler"}) // Evita bucle infinito JSON
+    @JsonIgnoreProperties({"historiales", "hibernateLazyInitializer", "handler"})
     private Contrato contrato;
 
-    @Column(nullable = false, length = 50)
-    private String estado;
+    // ✅ NUEVO: La descripción automática del sistema (Ej: "Cambio de Titular...")
+    @Column(length = 1000)
+    private String descripcion;
+
+    @Column(name = "tipo_registro", length = 50)
+    private String tipoRegistro;
 
     @Column(name = "fecha_registro", nullable = false, updatable = false)
     private LocalDateTime fechaRegistro;
 
-    @Column(name = "ruta_documento_pdf", length = 500)
+    @Column(name = "ruta_documento_pdf")
     private String rutaDocumentoPdf;
 
-    @Column(length = 500)
+    // Mantenemos observación para notas manuales opcionales
+    @Column(length = 1000)
     private String observacion;
 
     @PrePersist
     protected void onCreate() {
-        this.fechaRegistro = LocalDateTime.now(); // SE REGISTRA AUTOMÁTICAMENTE
+        this.fechaRegistro = LocalDateTime.now();
     }
 }

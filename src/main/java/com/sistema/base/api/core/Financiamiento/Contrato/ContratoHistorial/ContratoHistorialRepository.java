@@ -8,8 +8,8 @@ import java.util.List;
 @Repository
 public interface ContratoHistorialRepository extends JpaRepository<ContratoHistorial, Long> {
 
-    // Trae el historial de un contrato ordenado por fecha de registro (del más reciente al más antiguo)
     List<ContratoHistorial> findByContratoIdOrderByFechaRegistroDesc(Long contratoId);
 
-    boolean existsByContratoIdAndEstado(Long contratoId, String estado);
+    // ✅ CAMBIO: Ahora validamos duplicados por el tipo de registro en lugar del estado
+    boolean existsByContratoIdAndTipoRegistro(Long contratoId, String tipoRegistro);
 }

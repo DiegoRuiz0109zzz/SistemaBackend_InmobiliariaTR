@@ -2,8 +2,7 @@ package com.sistema.base.api.core.Financiamiento.Contrato;
 
 import com.sistema.base.api.core.Empresa.Empresa;
 import com.sistema.base.api.core.Empresa.EmpresaRepository;
-import com.sistema.base.api.core.Financiamiento.Contrato.ContratoHistorial.ContratoHistorial;
-import com.sistema.base.api.core.Financiamiento.Contrato.ContratoHistorial.ContratoHistorialRepository;
+import com.sistema.base.api.core.Financiamiento.Contrato.ContratoHistorial.ContratoHistorialService;
 import com.sistema.base.api.core.Financiamiento.Contrato.dtos.ContratoRequest;
 import com.sistema.base.api.core.Financiamiento.Contrato.dtos.CuotaPreview;
 import com.sistema.base.api.core.Financiamiento.Contrato.dtos.SimulacionRequest;
@@ -39,6 +38,7 @@ import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -52,7 +52,8 @@ public class ContratoService {
     private final PagoRepository pagoRepository;
     private final EmpresaRepository empresaRepository;
     private final CotizacionRepository cotizacionRepository;
-    private final ContratoHistorialRepository contratoHistorialRepository;
+
+    private final ContratoHistorialService contratoHistorialService;
     private final TemplateEngine templateEngine;
 
     public List<CuotaPreview> simularCronograma(SimulacionRequest request) {
@@ -123,7 +124,7 @@ public class ContratoService {
                 .cuotasFlexibles(req.getCuotasFlexibles() != null ? req.getCuotasFlexibles() : false)
                 .fechaInicioCronograma(req.getFechaInicioPago())
                 .estadoContrato(estadoContratoReal)
-                .fechaContrato(null) // Nace en null, se actualiza al generar el documento
+                .fechaContrato(LocalDate.now())
                 .build();
 
         Contrato contratoGuardado = contratoRepository.save(contrato);
@@ -164,11 +165,16 @@ public class ContratoService {
             cotizacionRepository.save(cotizacion);
         }
 
-        return contratoGuardado; // Retorna sin generar PDF ni historial.
+        // ✅ CAMBIO 1: Enviamos Tipo, Descripción (Generada) y Observación (Nulo o de la request)
+        String tipoHito = (contratoGuardado.getEstadoContrato() == EstadoContrato.SEPARADO) ? "CONTRATO_SEPARADO" : "CONTRATO_ACTIVO";
+        String descripcionHito = (contratoGuardado.getEstadoContrato() == EstadoContrato.SEPARADO) ? "Contrato de Separación registrado en el sistema." : "Contrato Activo registrado en el sistema.";
+        contratoHistorialService.registrarHito(contratoGuardado, tipoHito, descripcionHito, req.getObservacion());
+
+        return contratoGuardado;
     }
 
     // =========================================================================
-    // NUEVO ENDPOINT MAESTRO: VALIDA, GENERA PDF Y GUARDA EL HISTORIAL
+    // ENDPOINT PARA REGISTRAR HITO OFICIAL MANUAL (Reemplaza a generarNuevoDocumento)
     // =========================================================================
     @Transactional
     public Contrato generarNuevoDocumentoContrato(Long contratoId, String observacion) {
@@ -176,43 +182,94 @@ public class ContratoService {
         Contrato contrato = contratoRepository.findById(contratoId)
                 .orElseThrow(() -> new RuntimeException("Contrato no encontrado"));
 
-        // EXTRAEMOS EL ESTADO DIRECTAMENTE DE LA BASE DE DATOS
         EstadoContrato estadoActual = contrato.getEstadoContrato();
 
-        // 1. REGLA: Bloquear duplicados
-        if (contratoHistorialRepository.existsByContratoIdAndEstado(contratoId, estadoActual.name())) {
-            throw new RuntimeException("ERROR: El contrato ya tiene un documento generado para el estado " + estadoActual.name() + ". No se puede volver a generar.");
-        }
-
-        // 2. REGLA: Actualizar Fecha Hito (Ya no seteamos el estado porque ya es el correcto)
         contrato.setFechaContrato(LocalDate.now());
         Contrato contratoGuardado = contratoRepository.save(contrato);
 
-        try {
-            // 3. Preparar nombres para el archivo (Formato: ID_DNI_NOMBRESYAPELLIDOS_ESTADO)
-            String dni = contratoGuardado.getCliente().getNumeroDocumento();
-            String nombresApellidos = (contratoGuardado.getCliente().getNombres() + "_" + contratoGuardado.getCliente().getApellidos())
-                    .replaceAll("\\s+", "_").toUpperCase(); // Reemplaza espacios por subguiones
-
-            // 4. Generar PDF Físico y Guardar
-            byte[] pdfBytes = generarDocumentoPdfBytes(contratoGuardado);
-            String rutaFisica = guardarPdfEnDisco(pdfBytes, contratoGuardado.getId(), dni, nombresApellidos, estadoActual.name());
-
-            // 5. Crear Historial (la fechaRegistro se pone sola gracias a @PrePersist)
-            ContratoHistorial historial = ContratoHistorial.builder()
-                    .contrato(contratoGuardado)
-                    .estado(estadoActual.name())
-                    .rutaDocumentoPdf(rutaFisica)
-                    .observacion(observacion)
-                    .build();
-
-            contratoHistorialRepository.save(historial);
-
-        } catch (Exception e) {
-            throw new RuntimeException("Error al generar o guardar el documento PDF: " + e.getMessage());
-        }
+        // ✅ CAMBIO 2: Añadimos un texto descriptivo para este hito manual
+        String tipoHito = (estadoActual == EstadoContrato.SEPARADO) ? "CONTRATO_SEPARADO" : "CONTRATO_ACTIVO";
+        String descripcionHito = "Se registró un hito manual para la generación del documento.";
+        contratoHistorialService.registrarHito(contratoGuardado, tipoHito, descripcionHito, observacion);
 
         return contratoGuardado;
+    }
+
+    // =========================================================================
+    // ENDPOINT PARA ACTUALIZACIONES (Ejemplo para registrar Adendas/Modificaciones)
+    // =========================================================================
+    @Transactional
+    public Contrato actualizarContrato(Long id, ContratoRequest request) {
+        Contrato contrato = contratoRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Contrato no encontrado"));
+
+        StringBuilder cambios = new StringBuilder(); // Le quitamos el texto "Modificación de datos:" inicial
+        boolean huboCambios = false;
+
+        if (request.getClienteId() == null) {
+            throw new IllegalArgumentException("El contrato no puede quedarse vacío. Debe existir al menos un Titular.");
+        }
+
+        Cliente titularAntiguo = contrato.getCliente();
+        Cliente coCompradorAntiguo = contrato.getCoComprador();
+        Lote loteAntiguo = contrato.getLote();
+
+        // --- 1. ACTUALIZAR TITULAR ---
+        if (!Objects.equals(titularAntiguo.getId(), request.getClienteId())) {
+            Cliente nuevoTitular = clienteRepository.findById(request.getClienteId())
+                    .orElseThrow(() -> new RuntimeException("El nuevo Titular indicado no existe."));
+            contrato.setCliente(nuevoTitular);
+
+            cambios.append(String.format("Cambio de Titular principal: de '%s %s' a '%s %s'. ",
+                    titularAntiguo.getNombres(), titularAntiguo.getApellidos(),
+                    nuevoTitular.getNombres(), nuevoTitular.getApellidos()));
+            huboCambios = true;
+        }
+
+        // --- 2. ACTUALIZAR CO-COMPRADOR ---
+        Long idCoCompradorActual = (coCompradorAntiguo != null) ? coCompradorAntiguo.getId() : null;
+        if (!Objects.equals(idCoCompradorActual, request.getCoCompradorId())) {
+            if (request.getCoCompradorId() == null) {
+                contrato.setCoComprador(null);
+                cambios.append(String.format("Se eliminó a '%s %s' del contrato. ",
+                        coCompradorAntiguo.getNombres(), coCompradorAntiguo.getApellidos()));
+            } else {
+                Cliente nuevoCoComprador = clienteRepository.findById(request.getCoCompradorId())
+                        .orElseThrow(() -> new RuntimeException("El nuevo Co-Comprador indicado no existe."));
+                contrato.setCoComprador(nuevoCoComprador);
+
+                if (coCompradorAntiguo == null) {
+                    cambios.append(String.format("Se agregó al nuevo Comprador '%s %s'. ",
+                            nuevoCoComprador.getNombres(), nuevoCoComprador.getApellidos()));
+                } else {
+                    cambios.append(String.format("Cambio de Co-Comprador: de '%s %s' a '%s %s'. ",
+                            coCompradorAntiguo.getNombres(), coCompradorAntiguo.getApellidos(),
+                            nuevoCoComprador.getNombres(), nuevoCoComprador.getApellidos()));
+                }
+            }
+            huboCambios = true;
+        }
+
+        // --- 3. ACTUALIZAR LOTE ---
+        // --- 3. ACTUALIZAR LOTE ---
+        if (request.getLoteId() != null && !Objects.equals(loteAntiguo.getId(), request.getLoteId())) {
+            Lote nuevoLote = loteRepository.findById(request.getLoteId())
+                    .orElseThrow(() -> new RuntimeException("El nuevo lote indicado no existe."));
+            contrato.setLote(nuevoLote);
+
+            // Cambiado a getId() que es universal y 100% seguro
+            cambios.append(String.format("Cambio de Lote: del Lote ID %d al Lote ID %d. ",
+                    loteAntiguo.getId(), nuevoLote.getId()));
+            huboCambios = true;
+        }
+        Contrato actualizado = contratoRepository.save(contrato);
+
+        // ✅ CAMBIO 3: Registramos la descripción armada por el sistema + La nota que manden desde Postman
+        if (huboCambios) {
+            contratoHistorialService.registrarHito(actualizado, "MODIFICACION", cambios.toString().trim(), request.getObservacion());
+        }
+
+        return actualizado;
     }
 
     @Transactional(readOnly = true)
@@ -235,24 +292,6 @@ public class ContratoService {
             }
         } catch (Exception ignored) {}
         return null;
-    }
-
-    private String guardarPdfEnDisco(byte[] pdfBytes, Long contratoId, String dni, String nombresApellidos, String estado) throws Exception {
-        String carpetaDestino = "uploads/contratos_pdf/";
-        Path rutaDirectorio = Paths.get(carpetaDestino);
-
-        if (!Files.exists(rutaDirectorio)) {
-            Files.createDirectories(rutaDirectorio);
-        }
-
-        // FORMATO REQUERIDO: ID_DNI_NOMBRES_ESTADO.pdf
-        // Ejemplo: 15_72384732_CARLOS_RUIZ_MENDOZA_SEPARADO.pdf
-        String nombreArchivo = contratoId + "_" + dni + "_" + nombresApellidos + "_" + estado + ".pdf";
-
-        Path rutaArchivo = rutaDirectorio.resolve(nombreArchivo);
-        Files.write(rutaArchivo, pdfBytes);
-
-        return rutaArchivo.toString();
     }
 
     private byte[] generarDocumentoPdfBytes(Contrato contrato) {
@@ -293,8 +332,6 @@ public class ContratoService {
         Contrato contrato = contratoRepository.findById(contratoId)
                 .orElseThrow(() -> new RuntimeException("Contrato no encontrado"));
 
-        // Reutiliza el método privado que ya tienes armado con Thymeleaf
         return generarDocumentoPdfBytes(contrato);
     }
-
 }

@@ -39,20 +39,26 @@ public class ContratoController {
         return ResponseEntity.ok(contratoService.simularCronograma(request));
     }
 
-    // 1. CREA EL CONTRATO EN BASE DE DATOS (Sin PDF todavía)
+    // 1. CREA EL CONTRATO EN BASE DE DATOS (Y genera Hito Automático en Bitácora)
     @PostMapping("/")
     @PreAuthorize("hasAuthority('CREAR_CONTRATO')")
     public ResponseEntity<Contrato> crear(@RequestBody ContratoRequest request) {
         return ResponseEntity.ok(contratoService.generarContrato(request));
     }
 
-    // 2. ENDPOINT QUE GENERA EL PDF, EL HISTORIAL Y ACTUALIZA LA FECHA (Solo 1 vez por estado)
-    @PostMapping("/{id}/generar-documento")
-    @PreAuthorize("isAuthenticated()") // O el permiso que estés usando ('EDITAR_CONTRATO')
-    public ResponseEntity<?> generarDocumento(@PathVariable Long id) {
+    // ✅ NUEVO: ENDPOINT PARA ACTUALIZAR DATOS (Detecta cambios y genera hito de MODIFICACIÓN)
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('EDITAR_CONTRATO')") // Asegúrate de tener este permiso o usa isAuthenticated()
+    public ResponseEntity<Contrato> actualizar(@PathVariable Long id, @RequestBody ContratoRequest request) {
+        return ResponseEntity.ok(contratoService.actualizarContrato(id, request));
+    }
+
+    // 2. ENDPOINT QUE REGISTRA EL HITO OFICIAL Y ACTUALIZA LA FECHA (Reemplaza a generar-documento)
+    @PostMapping("/{id}/registrar-hito-oficial")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> registrarHitoOficial(@PathVariable Long id) {
         try {
-            // Ya no recibimos el nuevoEstado. El backend lo leerá solo.
-            String observacion = "Generación automática de documento oficial según el estado actual en BD.";
+            String observacion = "Registro oficial de contrato en bitácora.";
             Contrato contratoActualizado = contratoService.generarNuevoDocumentoContrato(id, observacion);
 
             return ResponseEntity.ok(contratoActualizado);
@@ -61,6 +67,7 @@ public class ContratoController {
         }
     }
 
+    // 3. LA VISTA PREVIA SIGUE SIENDO EL MOTOR PARA VER EL PDF AL VUELO
     @GetMapping("/{id}/vista-previa")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<byte[]> vistaPreviaContrato(@PathVariable Long id) {
@@ -68,7 +75,7 @@ public class ContratoController {
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_PDF);
-        // "inline" permite que se abra en el navegador
+        // "inline" permite que se abra en el navegador sin descargarlo obligatoriamente
         headers.setContentDispositionFormData("inline", "Vista_Previa_Contrato_" + id + ".pdf");
         headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
 
