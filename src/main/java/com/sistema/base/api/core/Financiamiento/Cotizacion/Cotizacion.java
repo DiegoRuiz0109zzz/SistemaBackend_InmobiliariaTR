@@ -51,6 +51,8 @@ public class Cotizacion {
 
     @Column(nullable = false)
     private Double montoInicialAcordado;
+    @Column(nullable = false)
+    private Double montoAbonadoIncial;
 
     @Column(nullable = false)
     private Integer cantidadCuotas;
@@ -65,6 +67,7 @@ public class Cotizacion {
 
     @Column(name = "cuotas_flexibles")
     private Boolean cuotasFlexibles;
+
 
     @Column(nullable = false)
     private LocalDate fechaCotizacion;

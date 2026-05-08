@@ -15,6 +15,7 @@ public class CotizacionRequest {
     private Boolean cuotasFlexibles;
 
     private Double montoCuotaCotizacion;
+    private Double montoAbonadoIncial;
     private Double saldoFinanciar;
 
     private Double precioTotal;

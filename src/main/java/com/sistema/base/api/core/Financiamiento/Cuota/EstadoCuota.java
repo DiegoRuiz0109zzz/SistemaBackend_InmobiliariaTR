@@ -4,5 +4,6 @@ public enum EstadoCuota {
     PENDIENTE,
     PAGADO_PARCIAL,
     PAGADO_TOTAL,
-    VENCIDO
+    VENCIDO,
+    PAGADO_DESTIEMPO
 }
