@@ -15,24 +15,24 @@ public interface CuotaRepository extends JpaRepository<Cuota, Long> {
     // ==========================================
     // CONSULTAS PARA DASHBOARD
     // ==========================================
-    @Query("SELECT COALESCE(SUM(c.montoPagado), 0.0) FROM Cuota c WHERE c.enabled = true " +
-           "AND (:urbanizacionId IS NULL OR c.contrato.lote.manzana.etapa.urbanizacion.id = :urbanizacionId) " +
-           "AND (:etapaId IS NULL OR c.contrato.lote.manzana.etapa.id = :etapaId) " +
-           "AND (:manzanaId IS NULL OR c.contrato.lote.manzana.id = :manzanaId)")
-    Double sumMontoPagado(@Param("urbanizacionId") Long urbanizacionId, @Param("etapaId") Long etapaId, @Param("manzanaId") Long manzanaId);
+   @Query("SELECT SUM(c.montoPagado) FROM Cuota c WHERE " +
+           "(:urbId IS NULL OR c.contrato.lote.manzana.etapa.urbanizacion.id = :urbId) AND " +
+           "(:etapaId IS NULL OR c.contrato.lote.manzana.etapa.id = :etapaId) AND " +
+           "(:manzId IS NULL OR c.contrato.lote.manzana.id = :manzId)")
+    Double sumMontoPagado(Long urbId, Long etapaId, Long manzId);
 
-    @Query("SELECT COALESCE(SUM(c.montoTotal - c.montoPagado), 0.0) FROM Cuota c WHERE c.enabled = true AND c.montoTotal > c.montoPagado " +
-           "AND (:urbanizacionId IS NULL OR c.contrato.lote.manzana.etapa.urbanizacion.id = :urbanizacionId) " +
-           "AND (:etapaId IS NULL OR c.contrato.lote.manzana.etapa.id = :etapaId) " +
-           "AND (:manzanaId IS NULL OR c.contrato.lote.manzana.id = :manzanaId)")
-    Double sumMontoPorCobrar(@Param("urbanizacionId") Long urbanizacionId, @Param("etapaId") Long etapaId, @Param("manzanaId") Long manzanaId);
+    @Query("SELECT SUM(c.montoTotal - COALESCE(c.montoPagado, 0)) FROM Cuota c WHERE " +
+           "(:urbId IS NULL OR c.contrato.lote.manzana.etapa.urbanizacion.id = :urbId) AND " +
+           "(:etapaId IS NULL OR c.contrato.lote.manzana.etapa.id = :etapaId) AND " +
+           "(:manzId IS NULL OR c.contrato.lote.manzana.id = :manzId)")
+    Double sumMontoPorCobrar(Long urbId, Long etapaId, Long manzId);
 
     @Query("SELECT new com.sistema.base.api.core.Dashboard.dtos.MensualChartDTO(" +
-            "CAST(EXTRACT(MONTH FROM c.fechaVencimiento) AS string), COUNT(c), SUM(c.montoTotal)) " +
-            "FROM Cuota c WHERE EXTRACT(YEAR FROM c.fechaVencimiento) = :anio AND " +
-            "(:urbId IS NULL OR c.contrato.lote.manzana.etapa.urbanizacion.id = :urbId) AND " +
-            "(:etapaId IS NULL OR c.contrato.lote.manzana.etapa.id = :etapaId) AND " +
-            "(:manzId IS NULL OR c.contrato.lote.manzana.id = :manzId) " +
-            "GROUP BY EXTRACT(MONTH FROM c.fechaVencimiento)")
+           "CAST(MONTH(c.fechaVencimiento) AS string), COUNT(c), SUM(c.montoTotal)) " +
+           "FROM Cuota c WHERE YEAR(c.fechaVencimiento) = :anio AND " +
+           "(:urbId IS NULL OR c.contrato.lote.manzana.etapa.urbanizacion.id = :urbId) AND " +
+           "(:etapaId IS NULL OR c.contrato.lote.manzana.etapa.id = :etapaId) AND " +
+           "(:manzId IS NULL OR c.contrato.lote.manzana.id = :manzId) " +
+           "GROUP BY MONTH(c.fechaVencimiento), CAST(MONTH(c.fechaVencimiento) AS string)")
     List<MensualChartDTO> findProyeccionCobrosMensuales(Integer anio, Long urbId, Long etapaId, Long manzId);
 }

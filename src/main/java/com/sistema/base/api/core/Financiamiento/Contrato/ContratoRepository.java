@@ -17,11 +17,11 @@ public interface ContratoRepository extends JpaRepository<Contrato, Long> {
     // CONSULTAS PARA DASHBOARD
     // ==========================================
     @Query("SELECT new com.sistema.base.api.core.Dashboard.dtos.MensualChartDTO(" +
-            "CAST(EXTRACT(MONTH FROM c.fechaContrato) AS string), COUNT(c), SUM(c.precioTotal)) " +
-            "FROM Contrato c WHERE EXTRACT(YEAR FROM c.fechaContrato) = :anio AND " +
-            "(:urbId IS NULL OR c.lote.manzana.etapa.urbanizacion.id = :urbId) AND " +
-            "(:etapaId IS NULL OR c.lote.manzana.etapa.id = :etapaId) AND " +
-            "(:manzId IS NULL OR c.lote.manzana.id = :manzId) " +
-            "GROUP BY EXTRACT(MONTH FROM c.fechaContrato)")
+           "CAST(MONTH(c.fechaContrato) AS string), COUNT(c), SUM(c.precioTotal)) " +
+           "FROM Contrato c WHERE YEAR(c.fechaContrato) = :anio AND " +
+           "(:urbId IS NULL OR c.lote.manzana.etapa.urbanizacion.id = :urbId) AND " +
+           "(:etapaId IS NULL OR c.lote.manzana.etapa.id = :etapaId) AND " +
+           "(:manzId IS NULL OR c.lote.manzana.id = :manzId) " +
+           "GROUP BY MONTH(c.fechaContrato), CAST(MONTH(c.fechaContrato) AS string)")
     List<MensualChartDTO> findVentasMensuales(Integer anio, Long urbId, Long etapaId, Long manzId);
 }
