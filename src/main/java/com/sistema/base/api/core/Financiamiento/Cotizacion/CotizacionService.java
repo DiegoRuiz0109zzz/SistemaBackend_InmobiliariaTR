@@ -72,6 +72,7 @@ public class CotizacionService {
                 .precioTotal(req.getPrecioTotal())
                 .montoInicialAcordado(req.getMontoInicialAcordado())
                 .montoAbonadoIncial(req.getMontoAbonadoIncial())
+                .fechaInicioPago(req.getFechaInicioPago())
                 .cantidadCuotas(req.getCantidadCuotas())
                 .cuotasEspeciales(req.getCuotasEspeciales())
                 .montoCuotaEspecial(req.getMontoCuotaEspecial())

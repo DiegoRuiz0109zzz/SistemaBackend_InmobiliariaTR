@@ -91,7 +91,7 @@ public class Contrato {
 
     // FECHA DE CREACIÓN DEL REGISTRO
     @Column(name = "fecha_registro", updatable = false)
-    private LocalDateTime fechaRegistro;
+    private LocalDate fechaRegistro;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "estado_contrato", length = 30)
@@ -109,7 +109,7 @@ public class Contrato {
 
     @PrePersist
     protected void onCreate() {
-        this.fechaRegistro = LocalDateTime.now();
+        this.fechaRegistro = LocalDate.now();
         if (this.estadoContrato == null) {
             this.estadoContrato = EstadoContrato.ACTIVO;
         }

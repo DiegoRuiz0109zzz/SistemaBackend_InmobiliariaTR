@@ -54,6 +54,9 @@ public class Cotizacion {
     @Column(nullable = false)
     private Double montoAbonadoIncial;
 
+    @Column(name = "fecha_inicio_pago")
+    private LocalDate fechaInicioPago;
+
     @Column(nullable = false)
     private Integer cantidadCuotas;
 
