@@ -7,6 +7,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -52,13 +54,13 @@ public class Pago {
     private EstadoPago estado = EstadoPago.PROCESADO;
 
     @Column(name = "fecha_pago", updatable = false)
-    private LocalDateTime fechaPago;
+    private LocalDate fechaPago;
 
     @Builder.Default
     private boolean enabled = true;
 
     @PrePersist
     protected void onCreate() {
-        fechaPago = LocalDateTime.now();
+        fechaPago = LocalDate.now();
     }
 }

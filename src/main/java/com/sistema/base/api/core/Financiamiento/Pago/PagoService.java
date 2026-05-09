@@ -151,7 +151,7 @@ public class PagoService {
         boolean pagoADestiempo = false;
 
         // Usamos la fecha en que se registró el pago original
-        LocalDate fechaDelPago = pago.getFechaPago().toLocalDate();
+        LocalDate fechaDelPago = pago.getFechaPago();
 
         if (fechaDelPago.isAfter(cuota.getFechaVencimiento())) {
             pagoADestiempo = true;

@@ -8,6 +8,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -35,7 +36,7 @@ public class ContratoHistorial {
     private String tipoRegistro;
 
     @Column(name = "fecha_registro", nullable = false, updatable = false)
-    private LocalDateTime fechaRegistro;
+    private LocalDate fechaRegistro;
 
     @Column(name = "ruta_documento_pdf")
     private String rutaDocumentoPdf;
@@ -46,6 +47,6 @@ public class ContratoHistorial {
 
     @PrePersist
     protected void onCreate() {
-        this.fechaRegistro = LocalDateTime.now();
+        this.fechaRegistro = LocalDate.now();
     }
 }

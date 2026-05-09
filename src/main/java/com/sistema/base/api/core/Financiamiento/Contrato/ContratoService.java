@@ -56,31 +56,56 @@ public class ContratoService {
     private final ContratoHistorialService contratoHistorialService;
     private final TemplateEngine templateEngine;
 
+    // ✅ MÉTODO AUXILIAR PARA CALCULAR LA FECHA INTELIGENTE
+    private LocalDate calcularSiguienteFechaVencimiento(LocalDate fechaInicial, int mesesASumar) {
+        boolean esFinDeMes = fechaInicial.getDayOfMonth() == fechaInicial.lengthOfMonth();
+        LocalDate fechaBase = fechaInicial.plusMonths(mesesASumar);
+
+        if (esFinDeMes) {
+            return fechaBase.withDayOfMonth(fechaBase.lengthOfMonth());
+        } else {
+            int diaOriginal = fechaInicial.getDayOfMonth();
+            int maxDiaMesDestino = fechaBase.lengthOfMonth();
+            return fechaBase.withDayOfMonth(Math.min(diaOriginal, maxDiaMesDestino));
+        }
+    }
+
     public List<CuotaPreview> simularCronograma(SimulacionRequest request) {
         List<CuotaPreview> cronograma = new ArrayList<>();
         Double saldoFinanciar = request.getPrecioTotal() - request.getMontoInicial();
         if (saldoFinanciar <= 0 || request.getCantidadCuotas() <= 0) return cronograma;
+
         int cuotasTotales = request.getCantidadCuotas();
         int cuotasEspeciales = (request.getCuotasEspeciales() != null) ? request.getCuotasEspeciales() : 0;
         Double montoEspecial = (request.getMontoCuotaEspecial() != null) ? request.getMontoCuotaEspecial() : 0.0;
         Double saldoRestante = saldoFinanciar;
-        if (cuotasEspeciales > 0 && montoEspecial > 0) { saldoRestante -= (cuotasEspeciales * montoEspecial); }
+
+        if (cuotasEspeciales > 0 && montoEspecial > 0) {
+            saldoRestante -= (cuotasEspeciales * montoEspecial);
+        }
+
         int cuotasNormales = cuotasTotales - cuotasEspeciales;
         Double cuotaBase = (cuotasNormales > 0) ? Math.round((saldoRestante / cuotasNormales) * 100.0) / 100.0 : 0.0;
+
         LocalDate fechaInicial = request.getFechaInicioPago();
-        int diaPreferido = fechaInicial.getDayOfMonth();
-        YearMonth mesActual = YearMonth.from(fechaInicial);
+
         for (int i = 0; i < cuotasTotales; i++) {
             Double montoAsignado = (i < cuotasEspeciales) ? montoEspecial : cuotaBase;
+
             if (i == cuotasTotales - 1 && cuotasNormales > 0) {
                 Double totalEspeciales = cuotasEspeciales * montoEspecial;
                 Double totalNormales = cuotaBase * (cuotasNormales - 1);
                 montoAsignado = Math.round((saldoFinanciar - totalEspeciales - totalNormales) * 100.0) / 100.0;
             }
-            YearMonth mesCuota = mesActual.plusMonths(i);
-            int diaReal = Math.min(diaPreferido, mesCuota.lengthOfMonth());
-            LocalDate fechaVencimiento = mesCuota.atDay(diaReal);
-            cronograma.add(CuotaPreview.builder().numeroCuota(i + 1).monto(montoAsignado).fechaVencimiento(fechaVencimiento).build());
+
+            // ✅ USAMOS EL MÉTODO INTELIGENTE PARA CALCULAR LA FECHA
+            LocalDate fechaVencimiento = calcularSiguienteFechaVencimiento(fechaInicial, i);
+
+            cronograma.add(CuotaPreview.builder()
+                    .numeroCuota(i + 1)
+                    .monto(montoAsignado)
+                    .fechaVencimiento(fechaVencimiento)
+                    .build());
         }
         return cronograma;
     }
@@ -147,6 +172,7 @@ public class ContratoService {
             sim.setCantidadCuotas(req.getCantidadCuotas()); sim.setFechaInicioPago(req.getFechaInicioPago());
             sim.setCuotasEspeciales(req.getCuotasEspeciales()); sim.setMontoCuotaEspecial(req.getMontoCuotaEspecial());
 
+            // La llamada a simularCronograma ya incluye la lógica de fin de mes
             List<CuotaPreview> proyeccion = simularCronograma(sim);
             List<Cuota> cuotasAGuardar = new ArrayList<>();
             int cantidadEspeciales = (req.getCuotasEspeciales() != null) ? req.getCuotasEspeciales() : 0;
@@ -165,7 +191,6 @@ public class ContratoService {
             cotizacionRepository.save(cotizacion);
         }
 
-        // ✅ CAMBIO 1: Enviamos Tipo, Descripción (Generada) y Observación (Nulo o de la request)
         String tipoHito = (contratoGuardado.getEstadoContrato() == EstadoContrato.SEPARADO) ? "CONTRATO_SEPARADO" : "CONTRATO_ACTIVO";
         String descripcionHito = (contratoGuardado.getEstadoContrato() == EstadoContrato.SEPARADO) ? "Contrato de Separación registrado en el sistema." : "Contrato Activo registrado en el sistema.";
         contratoHistorialService.registrarHito(contratoGuardado, tipoHito, descripcionHito, req.getObservacion());
@@ -173,9 +198,6 @@ public class ContratoService {
         return contratoGuardado;
     }
 
-    // =========================================================================
-    // ENDPOINT PARA REGISTRAR HITO OFICIAL MANUAL (Reemplaza a generarNuevoDocumento)
-    // =========================================================================
     @Transactional
     public Contrato generarNuevoDocumentoContrato(Long contratoId, String observacion) {
 
@@ -187,7 +209,6 @@ public class ContratoService {
         contrato.setFechaContrato(LocalDate.now());
         Contrato contratoGuardado = contratoRepository.save(contrato);
 
-        // ✅ CAMBIO 2: Añadimos un texto descriptivo para este hito manual
         String tipoHito = (estadoActual == EstadoContrato.SEPARADO) ? "CONTRATO_SEPARADO" : "CONTRATO_ACTIVO";
         String descripcionHito = "Se registró un hito manual para la generación del documento.";
         contratoHistorialService.registrarHito(contratoGuardado, tipoHito, descripcionHito, observacion);
@@ -195,15 +216,12 @@ public class ContratoService {
         return contratoGuardado;
     }
 
-    // =========================================================================
-    // ENDPOINT PARA ACTUALIZACIONES (Ejemplo para registrar Adendas/Modificaciones)
-    // =========================================================================
     @Transactional
     public Contrato actualizarContrato(Long id, ContratoRequest request) {
         Contrato contrato = contratoRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Contrato no encontrado"));
 
-        StringBuilder cambios = new StringBuilder(); // Le quitamos el texto "Modificación de datos:" inicial
+        StringBuilder cambios = new StringBuilder();
         boolean huboCambios = false;
 
         if (request.getClienteId() == null) {
@@ -214,7 +232,6 @@ public class ContratoService {
         Cliente coCompradorAntiguo = contrato.getCoComprador();
         Lote loteAntiguo = contrato.getLote();
 
-        // --- 1. ACTUALIZAR TITULAR ---
         if (!Objects.equals(titularAntiguo.getId(), request.getClienteId())) {
             Cliente nuevoTitular = clienteRepository.findById(request.getClienteId())
                     .orElseThrow(() -> new RuntimeException("El nuevo Titular indicado no existe."));
@@ -226,7 +243,6 @@ public class ContratoService {
             huboCambios = true;
         }
 
-        // --- 2. ACTUALIZAR CO-COMPRADOR ---
         Long idCoCompradorActual = (coCompradorAntiguo != null) ? coCompradorAntiguo.getId() : null;
         if (!Objects.equals(idCoCompradorActual, request.getCoCompradorId())) {
             if (request.getCoCompradorId() == null) {
@@ -250,21 +266,17 @@ public class ContratoService {
             huboCambios = true;
         }
 
-        // --- 3. ACTUALIZAR LOTE ---
-        // --- 3. ACTUALIZAR LOTE ---
         if (request.getLoteId() != null && !Objects.equals(loteAntiguo.getId(), request.getLoteId())) {
             Lote nuevoLote = loteRepository.findById(request.getLoteId())
                     .orElseThrow(() -> new RuntimeException("El nuevo lote indicado no existe."));
             contrato.setLote(nuevoLote);
 
-            // Cambiado a getId() que es universal y 100% seguro
             cambios.append(String.format("Cambio de Lote: del Lote ID %d al Lote ID %d. ",
                     loteAntiguo.getId(), nuevoLote.getId()));
             huboCambios = true;
         }
         Contrato actualizado = contratoRepository.save(contrato);
 
-        // ✅ CAMBIO 3: Registramos la descripción armada por el sistema + La nota que manden desde Postman
         if (huboCambios) {
             contratoHistorialService.registrarHito(actualizado, "MODIFICACION", cambios.toString().trim(), request.getObservacion());
         }

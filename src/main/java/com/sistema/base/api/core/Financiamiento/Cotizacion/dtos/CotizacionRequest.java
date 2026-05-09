@@ -3,6 +3,8 @@ package com.sistema.base.api.core.Financiamiento.Cotizacion.dtos;
 import com.sistema.base.api.core.Financiamiento.Contrato.TipoInicial;
 import lombok.Data;
 
+import java.time.LocalDate;
+
 @Data
 public class CotizacionRequest {
     private Long loteId;
@@ -17,6 +19,7 @@ public class CotizacionRequest {
     private Double montoCuotaCotizacion;
     private Double montoAbonadoIncial;
     private Double saldoFinanciar;
+    private LocalDate fechaInicioPago;
 
     private Double precioTotal;
     private Double montoInicialAcordado;
