@@ -1,6 +1,8 @@
 package com.sistema.base.api.core.Lotizacion.Lote;
 
 import com.sistema.base.api.core.Dashboard.dtos.MensualChartDTO;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -12,8 +14,17 @@ import java.util.List;
 @Repository
 public interface LoteRepository extends JpaRepository<Lote, Long> {
     List<Lote> findByEnabledTrue();
-    List<Lote> findByManzanaIdAndEnabledTrue(Long manzanaId); // Para listar los lotes de una manzana
+    // Para combos en cascada (ordenado por número)
+    List<Lote> findByManzanaIdAndEnabledTrueOrderByNumeroAsc(Long manzanaId);
 
+    // ✅ PARA LA TABLA PAGINADA: Las 4 combinaciones posibles
+    Page<Lote> findByEnabledTrue(Pageable pageable);
+
+    Page<Lote> findByEnabledTrueAndNumeroContainingIgnoreCase(String numero, Pageable pageable);
+
+    Page<Lote> findByEnabledTrueAndManzanaId(Long manzanaId, Pageable pageable);
+
+    Page<Lote> findByEnabledTrueAndManzanaIdAndNumeroContainingIgnoreCase(Long manzanaId, String numero, Pageable pageable);
     // ==========================================
     // CONSULTAS PARA DASHBOARD
     // ==========================================

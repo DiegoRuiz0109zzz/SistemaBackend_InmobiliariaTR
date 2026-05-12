@@ -1,6 +1,7 @@
 package com.sistema.base.api.core.Lotizacion.Manzana;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -24,6 +25,17 @@ public class ManzanaController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<Manzana>> listarPorEtapa(@PathVariable Long etapaId) {
         return ResponseEntity.ok(manzanaService.listarPorEtapa(etapaId));
+    }
+
+    // ✅ NUEVO ENDPOINT: Para la tabla de React (Paginado + Filtros)
+    @GetMapping("/page")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Page<Manzana>> listarPaginado(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Long etapaId) { // Recibe el ID de la Etapa desde un filtro/combo
+        return ResponseEntity.ok(manzanaService.listarPaginado(page, size, search, etapaId));
     }
 
     @PostMapping("/")
