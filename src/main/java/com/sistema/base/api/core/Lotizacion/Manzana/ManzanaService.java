@@ -3,6 +3,10 @@ package com.sistema.base.api.core.Lotizacion.Manzana;
 import com.sistema.base.api.core.Lotizacion.Etapa.Etapa;
 import com.sistema.base.api.core.Lotizacion.Etapa.EtapaRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
@@ -21,7 +25,29 @@ public class ManzanaService {
 
     @Transactional(readOnly = true)
     public List<Manzana> listarPorEtapa(Long etapaId) {
-        return manzanaRepository.findByEtapaIdAndEnabledTrue(etapaId);
+        return manzanaRepository.findByEtapaIdAndEnabledTrueOrderByNombreAsc(etapaId);
+    }
+    // ✅ NUEVO: Método paginado con orden Ascendente y doble filtro (Buscador + Etapa)
+    @Transactional(readOnly = true)
+    public Page<Manzana> listarPaginado(int page, int size, String search, Long etapaId) {
+        // ✅ CAMBIO CLAVE: Ahora ordenamos por "nombre" de forma ascendente (A -> Z)
+        Pageable pageable = PageRequest.of(page, size, Sort.by("nombre").ascending());
+
+        boolean hasSearch = search != null && !search.trim().isEmpty();
+        boolean hasEtapa = etapaId != null;
+
+        if (hasEtapa && hasSearch) {
+            return manzanaRepository.findByEnabledTrueAndEtapaIdAndNombreContainingIgnoreCase(etapaId, search, pageable);
+        }
+        else if (hasEtapa) {
+            return manzanaRepository.findByEnabledTrueAndEtapaId(etapaId, pageable);
+        }
+        else if (hasSearch) {
+            return manzanaRepository.findByEnabledTrueAndNombreContainingIgnoreCase(search, pageable);
+        }
+        else {
+            return manzanaRepository.findByEnabledTrue(pageable);
+        }
     }
 
     @Transactional(readOnly = true)

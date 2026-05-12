@@ -3,6 +3,10 @@ package com.sistema.base.api.core.Lotizacion.Etapa;
 import com.sistema.base.api.core.Lotizacion.Urbanizacion.Urbanizacion;
 import com.sistema.base.api.core.Lotizacion.Urbanizacion.UrbanizacionRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
@@ -22,6 +26,33 @@ public class EtapaService {
     @Transactional(readOnly = true)
     public List<Etapa> listarPorUrbanizacion(Long urbanizacionId) {
         return etapaRepository.findByUrbanizacionIdAndEnabledTrue(urbanizacionId);
+    }
+
+    // ✅ NUEVO: Método paginado con orden Ascendente y doble filtro
+    @Transactional(readOnly = true)
+    public Page<Etapa> listarPaginado(int page, int size, String search, Long urbanizacionId) {
+        // Orden ASCENDENTE: Primero en entrar, primero en mostrarse
+        Pageable pageable = PageRequest.of(page, size, Sort.by("id").ascending());
+
+        boolean hasSearch = search != null && !search.trim().isEmpty();
+        boolean hasUrbanizacion = urbanizacionId != null;
+
+        // Combinación 1: Tiene ID de Urbanización Y Texto de Búsqueda
+        if (hasUrbanizacion && hasSearch) {
+            return etapaRepository.findByEnabledTrueAndUrbanizacionIdAndNombreContainingIgnoreCase(urbanizacionId, search, pageable);
+        }
+        // Combinación 2: Solo tiene ID de Urbanización
+        else if (hasUrbanizacion) {
+            return etapaRepository.findByEnabledTrueAndUrbanizacionId(urbanizacionId, pageable);
+        }
+        // Combinación 3: Solo tiene Texto de Búsqueda
+        else if (hasSearch) {
+            return etapaRepository.findByEnabledTrueAndNombreContainingIgnoreCase(search, pageable);
+        }
+        // Combinación 4: Sin filtros, trae todo paginado
+        else {
+            return etapaRepository.findByEnabledTrue(pageable);
+        }
     }
 
     @Transactional(readOnly = true)

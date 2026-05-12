@@ -3,6 +3,10 @@ package com.sistema.base.api.core.Lotizacion.Lote;
 import com.sistema.base.api.core.Lotizacion.Manzana.Manzana;
 import com.sistema.base.api.core.Lotizacion.Manzana.ManzanaRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
@@ -19,9 +23,33 @@ public class LoteService {
         return loteRepository.findByEnabledTrue();
     }
 
+    // Listado en cascada ordenado por número
     @Transactional(readOnly = true)
     public List<Lote> listarPorManzana(Long manzanaId) {
-        return loteRepository.findByManzanaIdAndEnabledTrue(manzanaId);
+        return loteRepository.findByManzanaIdAndEnabledTrueOrderByNumeroAsc(manzanaId);
+    }
+
+    // ✅ NUEVO: Método paginado con orden Ascendente y doble filtro (Buscador + Manzana)
+    @Transactional(readOnly = true)
+    public Page<Lote> listarPaginado(int page, int size, String search, Long manzanaId) {
+        // Orden ASCENDENTE: Ordenará por número de lote (1, 2, 3...)
+        Pageable pageable = PageRequest.of(page, size, Sort.by("numero").ascending());
+
+        boolean hasSearch = search != null && !search.trim().isEmpty();
+        boolean hasManzana = manzanaId != null;
+
+        if (hasManzana && hasSearch) {
+            return loteRepository.findByEnabledTrueAndManzanaIdAndNumeroContainingIgnoreCase(manzanaId, search, pageable);
+        }
+        else if (hasManzana) {
+            return loteRepository.findByEnabledTrueAndManzanaId(manzanaId, pageable);
+        }
+        else if (hasSearch) {
+            return loteRepository.findByEnabledTrueAndNumeroContainingIgnoreCase(search, pageable);
+        }
+        else {
+            return loteRepository.findByEnabledTrue(pageable);
+        }
     }
 
     @Transactional(readOnly = true)

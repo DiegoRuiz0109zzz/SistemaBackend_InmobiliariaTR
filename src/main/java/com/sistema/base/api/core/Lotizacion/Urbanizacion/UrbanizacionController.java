@@ -1,6 +1,7 @@
 package com.sistema.base.api.core.Lotizacion.Urbanizacion;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -16,7 +17,15 @@ public class UrbanizacionController {
     @GetMapping("/")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<Urbanizacion>> listar() {
-        return ResponseEntity.ok(urbanizacionService.listarTodosActivos());
+        return ResponseEntity.ok(urbanizacionService.listarTodosActivos());}
+
+    @GetMapping("/page")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Page<Urbanizacion>> listarPaginado(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String search) {
+        return ResponseEntity.ok(urbanizacionService.listarPaginado(page, size, search));
     }
 
     @PostMapping("/")

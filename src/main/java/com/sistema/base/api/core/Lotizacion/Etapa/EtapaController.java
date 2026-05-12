@@ -1,6 +1,7 @@
 package com.sistema.base.api.core.Lotizacion.Etapa;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -24,6 +25,16 @@ public class EtapaController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<Etapa>> listarPorUrbanizacion(@PathVariable Long urbanizacionId) {
         return ResponseEntity.ok(etapaService.listarPorUrbanizacion(urbanizacionId));
+    }
+
+    @GetMapping("/page")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Page<Etapa>> listarPaginado(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Long urbanizacionId) { // Recibe el ID del Dropdown
+        return ResponseEntity.ok(etapaService.listarPaginado(page, size, search, urbanizacionId));
     }
 
     @PostMapping("/")
