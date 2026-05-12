@@ -34,8 +34,9 @@ public class ManzanaController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String search,
-            @RequestParam(required = false) Long etapaId) { // Recibe el ID de la Etapa desde un filtro/combo
-        return ResponseEntity.ok(manzanaService.listarPaginado(page, size, search, etapaId));
+            @RequestParam(required = false) Long etapaId,
+            @RequestParam(required = false) Long urbanizacionId) { // ✅ Nuevo parámetro
+        return ResponseEntity.ok(manzanaService.listarPaginado(page, size, search, etapaId, urbanizacionId));
     }
 
     @PostMapping("/")

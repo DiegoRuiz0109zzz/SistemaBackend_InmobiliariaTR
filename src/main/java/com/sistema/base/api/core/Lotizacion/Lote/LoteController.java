@@ -33,8 +33,10 @@ public class LoteController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String search,
-            @RequestParam(required = false) Long manzanaId) { // Recibe el ID de la Manzana desde un filtro/combo
-        return ResponseEntity.ok(loteService.listarPaginado(page, size, search, manzanaId));
+            @RequestParam(required = false) Long manzanaId,
+            @RequestParam(required = false) Long etapaId,             // ✅ Nuevo parámetro
+            @RequestParam(required = false) Long urbanizacionId) {    // ✅ Nuevo parámetro
+        return ResponseEntity.ok(loteService.listarPaginado(page, size, search, manzanaId, etapaId, urbanizacionId));
     }
 
     @PostMapping("/")

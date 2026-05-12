@@ -31,25 +31,15 @@ public class LoteService {
 
     // ✅ NUEVO: Método paginado con orden Ascendente y doble filtro (Buscador + Manzana)
     @Transactional(readOnly = true)
-    public Page<Lote> listarPaginado(int page, int size, String search, Long manzanaId) {
-        // Orden ASCENDENTE: Ordenará por número de lote (1, 2, 3...)
+    public Page<Lote> listarPaginado(int page, int size, String search, Long manzanaId, Long etapaId, Long urbanizacionId) {
+
         Pageable pageable = PageRequest.of(page, size, Sort.by("numero").ascending());
 
-        boolean hasSearch = search != null && !search.trim().isEmpty();
-        boolean hasManzana = manzanaId != null;
+        // Limpiamos la búsqueda: Si mandan un texto vacío o puros espacios, lo volvemos null
+        String numeroBusqueda = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
 
-        if (hasManzana && hasSearch) {
-            return loteRepository.findByEnabledTrueAndManzanaIdAndNumeroContainingIgnoreCase(manzanaId, search, pageable);
-        }
-        else if (hasManzana) {
-            return loteRepository.findByEnabledTrueAndManzanaId(manzanaId, pageable);
-        }
-        else if (hasSearch) {
-            return loteRepository.findByEnabledTrueAndNumeroContainingIgnoreCase(search, pageable);
-        }
-        else {
-            return loteRepository.findByEnabledTrue(pageable);
-        }
+        // Llamamos a la consulta maestra
+        return loteRepository.findByFiltrosPaginado(urbanizacionId, etapaId, manzanaId, numeroBusqueda, pageable);
     }
 
     @Transactional(readOnly = true)

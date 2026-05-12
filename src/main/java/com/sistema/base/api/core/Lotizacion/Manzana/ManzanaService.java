@@ -27,27 +27,16 @@ public class ManzanaService {
     public List<Manzana> listarPorEtapa(Long etapaId) {
         return manzanaRepository.findByEtapaIdAndEnabledTrueOrderByNombreAsc(etapaId);
     }
-    // ✅ NUEVO: Método paginado con orden Ascendente y doble filtro (Buscador + Etapa)
+
     @Transactional(readOnly = true)
-    public Page<Manzana> listarPaginado(int page, int size, String search, Long etapaId) {
-        // ✅ CAMBIO CLAVE: Ahora ordenamos por "nombre" de forma ascendente (A -> Z)
+    public Page<Manzana> listarPaginado(int page, int size, String search, Long etapaId, Long urbanizacionId) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("nombre").ascending());
 
-        boolean hasSearch = search != null && !search.trim().isEmpty();
-        boolean hasEtapa = etapaId != null;
+        // Limpiamos la búsqueda: Si mandan un texto vacío o puros espacios, lo volvemos null
+        String nombreBusqueda = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
 
-        if (hasEtapa && hasSearch) {
-            return manzanaRepository.findByEnabledTrueAndEtapaIdAndNombreContainingIgnoreCase(etapaId, search, pageable);
-        }
-        else if (hasEtapa) {
-            return manzanaRepository.findByEnabledTrueAndEtapaId(etapaId, pageable);
-        }
-        else if (hasSearch) {
-            return manzanaRepository.findByEnabledTrueAndNombreContainingIgnoreCase(search, pageable);
-        }
-        else {
-            return manzanaRepository.findByEnabledTrue(pageable);
-        }
+        // Mandamos todo al repositorio, la BD se encarga de ignorar los nulos
+        return manzanaRepository.findByFiltrosPaginado(urbanizacionId, etapaId, nombreBusqueda, pageable);
     }
 
     @Transactional(readOnly = true)
