@@ -33,12 +33,13 @@ public class LoteService {
     @Transactional(readOnly = true)
     public Page<Lote> listarPaginado(int page, int size, String search, Long manzanaId, Long etapaId, Long urbanizacionId) {
 
-        Pageable pageable = PageRequest.of(page, size, Sort.by("numero").ascending());
+        Pageable pageable = PageRequest.of(page, size, Sort.by(
+                Sort.Order.asc("manzana.nombre"),
+                Sort.Order.asc("numero")
+        ));
 
-        // Limpiamos la búsqueda: Si mandan un texto vacío o puros espacios, lo volvemos null
         String numeroBusqueda = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
 
-        // Llamamos a la consulta maestra
         return loteRepository.findByFiltrosPaginado(urbanizacionId, etapaId, manzanaId, numeroBusqueda, pageable);
     }
 

@@ -21,7 +21,8 @@ public interface LoteRepository extends JpaRepository<Lote, Long> {
             "AND (COALESCE(:urbanizacionId, NULL) IS NULL OR l.manzana.etapa.urbanizacion.id = :urbanizacionId) " +
             "AND (COALESCE(:etapaId, NULL) IS NULL OR l.manzana.etapa.id = :etapaId) " +
             "AND (COALESCE(:manzanaId, NULL) IS NULL OR l.manzana.id = :manzanaId) " +
-            "AND (COALESCE(:numero, NULL) IS NULL OR LOWER(l.numero) LIKE LOWER(CONCAT('%', :numero, '%')))")
+            "AND (COALESCE(:numero, NULL) IS NULL OR LOWER(l.numero) LIKE LOWER(CONCAT('%', :numero, '%'))) " +
+            "ORDER BY l.manzana.nombre ASC, LENGTH(l.numero) ASC, l.numero ASC") // ✅ ORDENAMIENTO MAESTRO
     Page<Lote> findByFiltrosPaginado(
             @Param("urbanizacionId") Long urbanizacionId,
             @Param("etapaId") Long etapaId,
