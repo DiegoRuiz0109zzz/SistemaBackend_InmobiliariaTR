@@ -17,14 +17,17 @@ public interface LoteRepository extends JpaRepository<Lote, Long> {
     // Para combos en cascada (ordenado por número)
     List<Lote> findByManzanaIdAndEnabledTrueOrderByNumeroAsc(Long manzanaId);
 
-    // ✅ PARA LA TABLA PAGINADA: Las 4 combinaciones posibles
-    Page<Lote> findByEnabledTrue(Pageable pageable);
-
-    Page<Lote> findByEnabledTrueAndNumeroContainingIgnoreCase(String numero, Pageable pageable);
-
-    Page<Lote> findByEnabledTrueAndManzanaId(Long manzanaId, Pageable pageable);
-
-    Page<Lote> findByEnabledTrueAndManzanaIdAndNumeroContainingIgnoreCase(Long manzanaId, String numero, Pageable pageable);
+    @Query("SELECT l FROM Lote l WHERE l.enabled = true " +
+            "AND (COALESCE(:urbanizacionId, NULL) IS NULL OR l.manzana.etapa.urbanizacion.id = :urbanizacionId) " +
+            "AND (COALESCE(:etapaId, NULL) IS NULL OR l.manzana.etapa.id = :etapaId) " +
+            "AND (COALESCE(:manzanaId, NULL) IS NULL OR l.manzana.id = :manzanaId) " +
+            "AND (COALESCE(:numero, NULL) IS NULL OR LOWER(l.numero) LIKE LOWER(CONCAT('%', :numero, '%')))")
+    Page<Lote> findByFiltrosPaginado(
+            @Param("urbanizacionId") Long urbanizacionId,
+            @Param("etapaId") Long etapaId,
+            @Param("manzanaId") Long manzanaId,
+            @Param("numero") String numero,
+            Pageable pageable);
     // ==========================================
     // CONSULTAS PARA DASHBOARD
     // ==========================================
