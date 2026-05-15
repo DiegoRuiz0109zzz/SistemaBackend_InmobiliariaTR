@@ -8,7 +8,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -33,18 +32,6 @@ public class ContratoHistorialController {
         return ResponseEntity.ok(contratoHistorialService.obtenerPorId(id));
     }
 
-    // ✅ NUEVO ENDPOINT: Para recibir el contrato firmado desde el Frontend
-    @PostMapping(value = "/{contratoId}/subir-pdf", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ContratoHistorial> subirPdf(
-            @PathVariable Long contratoId,
-            @RequestParam("tipoRegistro") String tipoRegistro,
-            @RequestParam("observacion") String observacion,
-            @RequestPart("archivo") MultipartFile archivo) {
-
-        return ResponseEntity.ok(contratoHistorialService.subirContratoPdf(contratoId, tipoRegistro, observacion, archivo));
-    }
-
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('ELIMINAR_HISTORIAL')")
     public ResponseEntity<Void> eliminar(@PathVariable Long id) {
@@ -52,7 +39,7 @@ public class ContratoHistorialController {
         return ResponseEntity.noContent().build();
     }
 
-    // El visor histórico (Aseguramos que no falle si la ruta es nula)
+    // ✅ El visor histórico se mantiene perfecto para auditoría
     @GetMapping("/{id}/pdf")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Resource> verPdfHistorico(@PathVariable Long id) {

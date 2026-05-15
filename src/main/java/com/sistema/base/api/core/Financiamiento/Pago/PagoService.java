@@ -3,10 +3,10 @@ package com.sistema.base.api.core.Financiamiento.Pago;
 import com.sistema.base.api.core.Financiamiento.Contrato.Contrato;
 import com.sistema.base.api.core.Financiamiento.Contrato.ContratoRepository;
 import com.sistema.base.api.core.Financiamiento.Contrato.EstadoContrato;
+import com.sistema.base.api.core.Financiamiento.Contrato.ContratoHistorial.ContratoHistorialService;
 import com.sistema.base.api.core.Financiamiento.Cuota.Cuota;
 import com.sistema.base.api.core.Financiamiento.Cuota.CuotaRepository;
 import com.sistema.base.api.core.Financiamiento.Cuota.EstadoCuota;
-
 import com.sistema.base.api.core.Lotizacion.Lote.EstadoLote;
 import com.sistema.base.api.core.Lotizacion.Lote.Lote;
 import com.sistema.base.api.core.Lotizacion.Lote.LoteRepository;
@@ -28,10 +28,9 @@ public class PagoService {
     private final PagoRepository pagoRepository;
     private final CuotaRepository cuotaRepository;
     private final FileStorageService fileStorageService;
-
-    // ✅ Inyectamos los repositorios necesarios para actualizar Contrato y Lote
     private final ContratoRepository contratoRepository;
     private final LoteRepository loteRepository;
+    private final ContratoHistorialService contratoHistorialService;
 
     @Transactional(readOnly = true)
     public List<Pago> listarPorCuota(Long cuotaId) {
@@ -60,20 +59,15 @@ public class PagoService {
         }
 
         String fotoVoucherUrl = null;
-
         if (voucherFile != null && !voucherFile.isEmpty()) {
             Cliente cliente = cuota.getContrato().getCliente();
             String customFileName = generarNombreVoucher(cliente, voucherFile);
-
             String savedPath = fileStorageService.storeFileWithCustomName(voucherFile, "vouchers", customFileName);
             fotoVoucherUrl = "uploads/" + savedPath;
         }
 
-        // ✅ NUEVA LÓGICA: Calcular pago a destiempo y días de retraso
         int diasRetraso = 0;
         boolean pagoADestiempo = false;
-
-        // Asumimos que el pago se está registrando HOY
         LocalDate fechaPagoActual = LocalDate.now();
 
         if (fechaPagoActual.isAfter(cuota.getFechaVencimiento())) {
@@ -88,7 +82,6 @@ public class PagoService {
                 .numeroOperacion(numeroOperacion)
                 .fotoVoucherUrl(fotoVoucherUrl)
                 .estado(EstadoPago.PROCESADO)
-                // Usamos los campos que agregaste en la Entidad Pago
                 .diasRetraso(diasRetraso)
                 .pagoADestiempo(pagoADestiempo)
                 .build();
@@ -96,29 +89,29 @@ public class PagoService {
         double nuevoMontoPagado = cuota.getMontoPagado() + pago.getMontoAbonado();
         cuota.setMontoPagado(nuevoMontoPagado);
 
-        // ✅ Verificamos si la cuota fue pagada en su totalidad
         if (nuevoMontoPagado >= cuota.getMontoTotal()) {
+            cuota.setEstado(pagoADestiempo ? EstadoCuota.PAGADO_DESTIEMPO : EstadoCuota.PAGADO_TOTAL);
 
-            // 🔥 LÓGICA ACTUALIZADA: Decidir si se pagó a tiempo o a destiempo
-            if (pagoADestiempo) {
-                cuota.setEstado(EstadoCuota.PAGADO_DESTIEMPO);
-            } else {
-                cuota.setEstado(EstadoCuota.PAGADO_TOTAL);
-            }
-
-            // ✅ LÓGICA DE CUOTA INICIAL (Se mantiene igual)
             if (cuota.getNumeroCuota() != null && cuota.getNumeroCuota() == 0) {
                 Contrato contrato = cuota.getContrato();
                 contrato.setEstadoContrato(EstadoContrato.ACTIVO);
+
+                // ✅ RESET DOCUMENTAL: Se limpia para exigir la subida del contrato definitivo
+                contrato.setUrlDocumentoFirmado(null);
                 contratoRepository.save(contrato);
 
                 Lote lote = contrato.getLote();
                 lote.setEstadoVenta(EstadoLote.VENDIDO);
                 loteRepository.save(lote);
-            }
 
+                contratoHistorialService.registrarHito(
+                        contrato,
+                        "CONTRATO_ACTIVO",
+                        "Inicial completada. Se requiere subir el Contrato de Compra-Venta definitivo firmado.",
+                        "Pago validado (" + metodoPago + ")"
+                );
+            }
         } else {
-            // Si no pagó el total, se queda como parcial
             cuota.setEstado(EstadoCuota.PAGADO_PARCIAL);
         }
 
@@ -132,25 +125,20 @@ public class PagoService {
                 .orElseThrow(() -> new RuntimeException("Pago no encontrado."));
 
         if (pago.getEstado() == EstadoPago.PROCESADO) {
-            throw new RuntimeException("Este pago ya fue procesado y validado.");
+            throw new RuntimeException("Este pago ya fue procesado.");
         }
 
         Cuota cuota = pago.getCuota();
         String fotoVoucherUrl = null;
-
         if (voucherFile != null && !voucherFile.isEmpty()) {
             Cliente cliente = cuota.getContrato().getCliente();
             String customFileName = generarNombreVoucher(cliente, voucherFile);
-
             String savedPath = fileStorageService.storeFileWithCustomName(voucherFile, "vouchers", customFileName);
             fotoVoucherUrl = "uploads/" + savedPath;
         }
 
-        // ✅ NUEVA LÓGICA: Calcular pago a destiempo y días de retraso
         int diasRetraso = 0;
         boolean pagoADestiempo = false;
-
-        // Usamos la fecha en que se registró el pago original
         LocalDate fechaDelPago = pago.getFechaPago();
 
         if (fechaDelPago.isAfter(cuota.getFechaVencimiento())) {
@@ -160,39 +148,37 @@ public class PagoService {
 
         pago.setMetodoPago(metodoPago);
         pago.setNumeroOperacion(numeroOperacion);
-        if (fotoVoucherUrl != null) {
-            pago.setFotoVoucherUrl(fotoVoucherUrl);
-        }
+        if (fotoVoucherUrl != null) pago.setFotoVoucherUrl(fotoVoucherUrl);
         pago.setEstado(EstadoPago.PROCESADO);
-        pago.setDiasRetraso(diasRetraso); // Setear los días
-        pago.setPagoADestiempo(pagoADestiempo); // Setear el flag
+        pago.setDiasRetraso(diasRetraso);
+        pago.setPagoADestiempo(pagoADestiempo);
 
         double nuevoMontoPagado = cuota.getMontoPagado() + pago.getMontoAbonado();
         cuota.setMontoPagado(nuevoMontoPagado);
 
-        // ✅ Verificamos si la cuota fue pagada en su totalidad
         if (nuevoMontoPagado >= cuota.getMontoTotal()) {
+            cuota.setEstado(pagoADestiempo ? EstadoCuota.PAGADO_DESTIEMPO : EstadoCuota.PAGADO_TOTAL);
 
-            // 🔥 LÓGICA ACTUALIZADA: Decidir si se pagó a tiempo o a destiempo
-            if (pagoADestiempo) {
-                cuota.setEstado(EstadoCuota.PAGADO_DESTIEMPO);
-            } else {
-                cuota.setEstado(EstadoCuota.PAGADO_TOTAL);
-            }
-
-            // ✅ LÓGICA DE CUOTA INICIAL (Se mantiene igual)
             if (cuota.getNumeroCuota() != null && cuota.getNumeroCuota() == 0) {
                 Contrato contrato = cuota.getContrato();
                 contrato.setEstadoContrato(EstadoContrato.ACTIVO);
+
+                // ✅ RESET DOCUMENTAL: Se limpia para exigir la subida del contrato definitivo
+                contrato.setUrlDocumentoFirmado(null);
                 contratoRepository.save(contrato);
 
                 Lote lote = contrato.getLote();
                 lote.setEstadoVenta(EstadoLote.VENDIDO);
                 loteRepository.save(lote);
-            }
 
+                contratoHistorialService.registrarHito(
+                        contrato,
+                        "CONTRATO_ACTIVO",
+                        "Inicial completada mediante proceso pendiente. Se requiere subir el Contrato oficial firmado.",
+                        "Pago procesado en caja (" + metodoPago + ")"
+                );
+            }
         } else {
-            // Si no pagó el total, se queda como parcial
             cuota.setEstado(EstadoCuota.PAGADO_PARCIAL);
         }
 
@@ -207,14 +193,9 @@ public class PagoService {
 
         Cuota cuota = pago.getCuota();
         cuota.setMontoPagado(cuota.getMontoPagado() - pago.getMontoAbonado());
+        cuota.setEstado(cuota.getMontoPagado() <= 0 ? EstadoCuota.PENDIENTE : EstadoCuota.PAGADO_PARCIAL);
 
-        if (cuota.getMontoPagado() <= 0) {
-            cuota.setEstado(EstadoCuota.PENDIENTE);
-        } else {
-            cuota.setEstado(EstadoCuota.PAGADO_PARCIAL);
-        }
         cuotaRepository.save(cuota);
-
         pago.setEnabled(false);
         pagoRepository.save(pago);
     }

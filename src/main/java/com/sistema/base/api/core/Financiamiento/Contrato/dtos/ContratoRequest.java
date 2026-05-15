@@ -19,8 +19,6 @@ public class ContratoRequest {
     private Integer cantidadCuotas;
     private LocalDate fechaInicioPago;
 
-    private LocalDate fechaContrato;
-
     private Integer cuotasEspeciales;
     private Double montoCuotaEspecial;
 

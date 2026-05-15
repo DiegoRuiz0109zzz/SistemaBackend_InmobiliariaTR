@@ -10,6 +10,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile; // ✅ NUEVO IMPORT PARA ARCHIVOS
 
 import java.util.List;
 import java.util.Map;
@@ -46,14 +47,29 @@ public class ContratoController {
         return ResponseEntity.ok(contratoService.generarContrato(request));
     }
 
-    // ✅ NUEVO: ENDPOINT PARA ACTUALIZAR DATOS (Detecta cambios y genera hito de MODIFICACIÓN)
+    // 2. ENDPOINT PARA ACTUALIZAR DATOS (Detecta cambios y genera hito de MODIFICACIÓN)
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('EDITAR_CONTRATO')") // Asegúrate de tener este permiso o usa isAuthenticated()
+    @PreAuthorize("hasAuthority('EDITAR_CONTRATO')")
     public ResponseEntity<Contrato> actualizar(@PathVariable Long id, @RequestBody ContratoRequest request) {
         return ResponseEntity.ok(contratoService.actualizarContrato(id, request));
     }
 
-    // 2. ENDPOINT QUE REGISTRA EL HITO OFICIAL Y ACTUALIZA LA FECHA (Reemplaza a generar-documento)
+    // ✅ 3. NUEVO ENDPOINT: SUBIR O REEMPLAZAR DOCUMENTO FIRMADO (PDF)
+    @PostMapping(value = "/{id}/subir-documento", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('EDITAR_CONTRATO')") // O el permiso que consideres adecuado
+    public ResponseEntity<?> subirDocumentoFirmado(
+            @PathVariable Long id,
+            @RequestParam("archivo") MultipartFile archivo,
+            @RequestParam("motivo") String motivo) {
+        try {
+            Contrato contratoActualizado = contratoService.subirDocumentoFirmado(id, archivo, motivo);
+            return ResponseEntity.ok(contratoActualizado);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // 4. ENDPOINT QUE REGISTRA EL HITO OFICIAL Y ACTUALIZA LA FECHA (Reemplaza a generar-documento)
     @PostMapping("/{id}/registrar-hito-oficial")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<?> registrarHitoOficial(@PathVariable Long id) {
@@ -67,7 +83,7 @@ public class ContratoController {
         }
     }
 
-    // 3. LA VISTA PREVIA SIGUE SIENDO EL MOTOR PARA VER EL PDF AL VUELO
+    // 5. LA VISTA PREVIA SIGUE SIENDO EL MOTOR PARA VER EL PDF AL VUELO
     @GetMapping("/{id}/vista-previa")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<byte[]> vistaPreviaContrato(@PathVariable Long id) {
