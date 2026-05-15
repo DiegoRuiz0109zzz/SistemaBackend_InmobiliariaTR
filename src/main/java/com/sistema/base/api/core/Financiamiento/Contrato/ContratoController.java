@@ -97,4 +97,10 @@ public class ContratoController {
 
         return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
     }
+
+    @PutMapping("/{id}/completar-medidas")
+    @PreAuthorize("hasAuthority('EDITAR_CONTRATO')")
+    public ResponseEntity<Contrato> completarMedidas(@PathVariable Long id, @RequestBody ContratoRequest request) {
+        return ResponseEntity.ok(contratoService.registrarMedidasYPerimetro(id, request));
+    }
 }

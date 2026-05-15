@@ -3,6 +3,7 @@ package com.sistema.base.api.core.Financiamiento.Contrato;
 import com.sistema.base.api.core.Empresa.Empresa;
 import com.sistema.base.api.core.Empresa.EmpresaRepository;
 import com.sistema.base.api.core.Financiamiento.Contrato.ContratoHistorial.ContratoHistorialService;
+import com.sistema.base.api.core.Financiamiento.Contrato.ContratoMedida.ContratoMedidas;
 import com.sistema.base.api.core.Financiamiento.Contrato.dtos.ContratoRequest;
 import com.sistema.base.api.core.Financiamiento.Contrato.dtos.CuotaPreview;
 import com.sistema.base.api.core.Financiamiento.Contrato.dtos.SimulacionRequest;
@@ -364,5 +365,36 @@ public class ContratoService {
     public byte[] generarVistaPreviaPdf(Long contratoId) {
         Contrato contrato = obtenerPorId(contratoId);
         return generarDocumentoPdfBytes(contrato);
+    }
+
+    @Transactional
+    public Contrato registrarMedidasYPerimetro(Long contratoId, ContratoRequest req) {
+        Contrato contrato = contratoRepository.findById(contratoId)
+                .orElseThrow(() -> new RuntimeException("Contrato no encontrado"));
+
+        // Calculamos el perímetro en el momento
+        Double perimetro = (req.getMlFrente() != null ? req.getMlFrente() : 0.0) +
+                (req.getMlDerecha() != null ? req.getMlDerecha() : 0.0) +
+                (req.getMlIzquierda() != null ? req.getMlIzquierda() : 0.0) +
+                (req.getMlFondo() != null ? req.getMlFondo() : 0.0);
+
+        // Creamos o actualizamos la entidad de medidas
+        ContratoMedidas medidas = (contrato.getMedidas() != null) ? contrato.getMedidas() : new ContratoMedidas();
+
+        medidas.setContrato(contrato);
+        medidas.setMlFrente(req.getMlFrente());
+        medidas.setMlDerecha(req.getMlDerecha());
+        medidas.setMlIzquierda(req.getMlIzquierda());
+        medidas.setMlFondo(req.getMlFondo());
+        medidas.setColindanciaFrente(req.getColindanciaFrente());
+        medidas.setColindanciaDerecha(req.getColindanciaDerecha());
+        medidas.setColindanciaIzquierda(req.getColindanciaIzquierda());
+        medidas.setColindanciaFondo(req.getColindanciaFondo());
+        medidas.setPerimetro(perimetro);
+
+        contrato.setMedidas(medidas);
+
+        // Al guardar el contrato, por CascadeType.ALL, se guarda la tabla de medidas
+        return contratoRepository.save(contrato);
     }
 }

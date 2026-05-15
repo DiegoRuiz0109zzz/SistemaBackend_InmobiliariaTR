@@ -203,12 +203,40 @@
 </p>
 
 <ul class="linderos-list">
-    <li>Por el Frente: <span class="placeholder">[LINDERO FRENTE]</span></li>
-    <li>Por el Lado Derecho: <span class="placeholder">[LINDERO DERECHO]</span></li>
-    <li>Por el Lado Izquierdo: <span class="placeholder">[LINDERO IZQUIERDO]</span></li>
-    <li>Por el Fondo: <span class="placeholder">[LINDERO FONDO]</span></li>
-    <li>Perímetro: <span class="placeholder">[PERÍMETRO TOTAL]</span></li>
-</ul>
+    <li>
+        Por el Frente:
+        <span  th:if="${contrato.medidas != null and contrato.medidas.colindanciaFrente != null}" th:text="${contrato.medidas.colindanciaFrente}"></span>
+        <span  th:unless="${contrato.medidas != null and contrato.medidas.colindanciaFrente != null}">______________________</span>, Con
+        <span  th:if="${contrato.medidas != null and contrato.medidas.mlFrente != null}" th:text="${contrato.medidas.mlFrente}"></span>
+        <span  th:unless="${contrato.medidas != null and contrato.medidas.mlFrente != null}">______</span> ml.
+    </li>
+    <li>
+        Por el Lado Derecho:
+        <span  th:if="${contrato.medidas != null and contrato.medidas.colindanciaDerecha != null}" th:text="${contrato.medidas.colindanciaDerecha}"></span>
+        <span  th:unless="${contrato.medidas != null and contrato.medidas.colindanciaDerecha != null}">______________________</span>, Con
+        <span  th:if="${contrato.medidas != null and contrato.medidas.mlDerecha != null}" th:text="${contrato.medidas.mlDerecha}"></span>
+        <span  th:unless="${contrato.medidas != null and contrato.medidas.mlDerecha != null}">______</span> ml.
+    </li>
+    <li>
+        Por el Lado Izquierdo:
+        <span  th:if="${contrato.medidas != null and contrato.medidas.colindanciaIzquierda != null}" th:text="${contrato.medidas.colindanciaIzquierda}"></span>
+        <span  th:unless="${contrato.medidas != null and contrato.medidas.colindanciaIzquierda != null}">______________________</span>, Con
+        <span  th:if="${contrato.medidas != null and contrato.medidas.mlIzquierda != null}" th:text="${contrato.medidas.mlIzquierda}"></span>
+        <span  th:unless="${contrato.medidas != null and contrato.medidas.mlIzquierda != null}">______</span> ml.
+    </li>
+    <li>
+        Por el Fondo:
+        <span  th:if="${contrato.medidas != null and contrato.medidas.colindanciaFondo != null}" th:text="${contrato.medidas.colindanciaFondo}"></span>
+        <span  th:unless="${contrato.medidas != null and contrato.medidas.colindanciaFondo != null}">______________________</span>, Con
+        <span  th:if="${contrato.medidas != null and contrato.medidas.mlFondo != null}" th:text="${contrato.medidas.mlFondo}"></span>
+        <span  th:unless="${contrato.medidas != null and contrato.medidas.mlFondo != null}">______</span> ml.
+    </li>
+    <li>
+        Perímetro:
+        <span  th:if="${contrato.medidas != null and contrato.medidas.perimetro != null}" th:text="${contrato.medidas.perimetro}"></span>
+        <span  th:unless="${contrato.medidas != null and contrato.medidas.perimetro != null}">______</span> ml.
+    </li>
+    </ul>
 
 <!-- SALTO DE PÁGINA APLICADO AQUÍ -->
 <div class="clause-title salto-pagina">PRECIO</div>

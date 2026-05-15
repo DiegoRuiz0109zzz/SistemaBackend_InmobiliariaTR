@@ -2,6 +2,7 @@ package com.sistema.base.api.core.Financiamiento.Contrato;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.sistema.base.api.core.Financiamiento.Contrato.ContratoHistorial.ContratoHistorial;
+import com.sistema.base.api.core.Financiamiento.Contrato.ContratoMedida.ContratoMedidas;
 import com.sistema.base.api.core.Financiamiento.Cotizacion.Cotizacion;
 import com.sistema.base.api.core.Lotizacion.Lote.Lote;
 import com.sistema.base.api.core.Usuario.Clientes.Cliente;
@@ -53,6 +54,10 @@ public class Contrato {
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Cotizacion cotizacionOrigen;
 
+    @OneToOne(mappedBy = "contrato", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnoreProperties({"contrato", "hibernateLazyInitializer", "handler"})
+    private ContratoMedidas medidas;
+
     @Column(nullable = false)
     private Double precioTotal;
 
@@ -65,7 +70,7 @@ public class Contrato {
     @Column(nullable = false)
     private Double saldoFinanciar;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private Integer cantidadCuotas;
 
     @Column(length = 1000)
