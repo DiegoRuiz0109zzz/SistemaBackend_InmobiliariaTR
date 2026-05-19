@@ -19,8 +19,6 @@ public class ContratoRequest {
     private Integer cantidadCuotas;
     private LocalDate fechaInicioPago;
 
-    private LocalDate fechaContrato;
-
     private Integer cuotasEspeciales;
     private Double montoCuotaEspecial;
 
@@ -30,4 +28,13 @@ public class ContratoRequest {
 
     // NUEVO: Observación manual del vendedor
     private String observacion;
+
+    private Double mlFrente;
+    private Double mlDerecha;
+    private Double mlIzquierda;
+    private Double mlFondo;
+    private String colindanciaFrente;
+    private String colindanciaDerecha;
+    private String colindanciaIzquierda;
+    private String colindanciaFondo;
 }

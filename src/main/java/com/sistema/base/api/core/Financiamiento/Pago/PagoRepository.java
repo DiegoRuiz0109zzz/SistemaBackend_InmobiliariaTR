@@ -7,4 +7,5 @@ import java.util.List;
 @Repository
 public interface PagoRepository extends JpaRepository<Pago, Long> {
     List<Pago> findByCuotaIdAndEnabledTrue(Long cuotaId);
+    List<Pago> findByCuotaId(Long cuotaId);
 }

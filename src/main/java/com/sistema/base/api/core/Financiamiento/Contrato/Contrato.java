@@ -2,6 +2,7 @@ package com.sistema.base.api.core.Financiamiento.Contrato;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.sistema.base.api.core.Financiamiento.Contrato.ContratoHistorial.ContratoHistorial;
+import com.sistema.base.api.core.Financiamiento.Contrato.ContratoMedida.ContratoMedidas;
 import com.sistema.base.api.core.Financiamiento.Cotizacion.Cotizacion;
 import com.sistema.base.api.core.Lotizacion.Lote.Lote;
 import com.sistema.base.api.core.Usuario.Clientes.Cliente;
@@ -13,7 +14,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -54,6 +54,10 @@ public class Contrato {
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Cotizacion cotizacionOrigen;
 
+    @OneToOne(mappedBy = "contrato", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnoreProperties({"contrato", "hibernateLazyInitializer", "handler"})
+    private ContratoMedidas medidas;
+
     @Column(nullable = false)
     private Double precioTotal;
 
@@ -66,7 +70,7 @@ public class Contrato {
     @Column(nullable = false)
     private Double saldoFinanciar;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private Integer cantidadCuotas;
 
     @Column(length = 1000)
@@ -75,9 +79,6 @@ public class Contrato {
     @Enumerated(EnumType.STRING)
     @Column(name = "tipo_inicial", length = 20)
     private TipoInicial tipoInicial;
-
-    @Column(length = 1000)
-    private String observacion;
 
     @Column(name = "cuotas_flexibles")
     private Boolean cuotasFlexibles;
@@ -97,6 +98,10 @@ public class Contrato {
     @Column(name = "estado_contrato", length = 30)
     private EstadoContrato estadoContrato;
 
+    // ✅ NUEVO: Columna para gestión documental (Alerta de Falta de Documento)
+    @Column(name = "url_documento_firmado", length = 500)
+    private String urlDocumentoFirmado;
+
     @Builder.Default
     @Column(name = "enabled", nullable = false)
     private boolean enabled = true;
@@ -110,8 +115,11 @@ public class Contrato {
     @PrePersist
     protected void onCreate() {
         this.fechaRegistro = LocalDate.now();
+        this.fechaContrato = LocalDate.now();
+
+        // El contrato nace por defecto como SEPARADO
         if (this.estadoContrato == null) {
-            this.estadoContrato = EstadoContrato.ACTIVO;
+            this.estadoContrato = EstadoContrato.SEPARADO;
         }
         if (this.cuotasFlexibles == null) {
             this.cuotasFlexibles = false;
