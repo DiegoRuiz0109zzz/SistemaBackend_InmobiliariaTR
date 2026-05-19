@@ -53,7 +53,7 @@ public class Pago {
     @Builder.Default
     private EstadoPago estado = EstadoPago.PROCESADO;
 
-    @Column(name = "fecha_pago", updatable = false)
+    @Column(name = "fecha_pago")
     private LocalDate fechaPago;
 
     @Builder.Default

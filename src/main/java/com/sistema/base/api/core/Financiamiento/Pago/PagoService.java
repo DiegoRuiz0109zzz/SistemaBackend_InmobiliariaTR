@@ -1,5 +1,6 @@
 package com.sistema.base.api.core.Financiamiento.Pago;
 
+import com.sistema.base.api.core.Financiamiento.Comision.ComisionService;
 import com.sistema.base.api.core.Financiamiento.Contrato.Contrato;
 import com.sistema.base.api.core.Financiamiento.Contrato.ContratoRepository;
 import com.sistema.base.api.core.Financiamiento.Contrato.EstadoContrato;
@@ -31,6 +32,9 @@ public class PagoService {
     private final ContratoRepository contratoRepository;
     private final LoteRepository loteRepository;
     private final ContratoHistorialService contratoHistorialService;
+
+    // ✅ INYECTAMOS EL MOTOR DE COMISIONES
+    private final ComisionService comisionService;
 
     @Transactional(readOnly = true)
     public List<Pago> listarPorCuota(Long cuotaId) {
@@ -116,7 +120,20 @@ public class PagoService {
         }
 
         cuotaRepository.save(cuota);
-        return pagoRepository.save(pago);
+        Pago pagoGuardado = pagoRepository.save(pago);
+
+        // ✅ GATILLO DE COMISIONES (Verificamos si ya pagó S/ 2500 en total en este contrato)
+        Contrato contrato = cuota.getContrato();
+        double totalPagadoHastaHoy = cuotaRepository.findByContratoIdAndEnabledTrueOrderByNumeroCuotaAsc(contrato.getId())
+                .stream()
+                .mapToDouble(Cuota::getMontoPagado)
+                .sum();
+
+        if (totalPagadoHastaHoy >= 2500.0) {
+            comisionService.evaluarYGenerarComisiones(contrato);
+        }
+
+        return pagoGuardado;
     }
 
     @Transactional
@@ -183,7 +200,20 @@ public class PagoService {
         }
 
         cuotaRepository.save(cuota);
-        return pagoRepository.save(pago);
+        Pago pagoGuardado = pagoRepository.save(pago);
+
+        // ✅ GATILLO DE COMISIONES (Verificamos si ya pagó S/ 2500 en total en este contrato)
+        Contrato contrato = cuota.getContrato();
+        double totalPagadoHastaHoy = cuotaRepository.findByContratoIdAndEnabledTrueOrderByNumeroCuotaAsc(contrato.getId())
+                .stream()
+                .mapToDouble(Cuota::getMontoPagado)
+                .sum();
+
+        if (totalPagadoHastaHoy >= 2500.0) {
+            comisionService.evaluarYGenerarComisiones(contrato);
+        }
+
+        return pagoGuardado;
     }
 
     @Transactional
@@ -198,5 +228,34 @@ public class PagoService {
         cuotaRepository.save(cuota);
         pago.setEnabled(false);
         pagoRepository.save(pago);
+    }
+
+    @Transactional
+    public void recalcularAtrasosPorContrato(Long contratoId) {
+        // Obtenemos todas las cuotas del contrato
+        List<Cuota> cuotas = cuotaRepository.findByContratoIdOrderByNumeroCuotaAsc(contratoId);
+
+        for (Cuota cuota : cuotas) {
+            // Obtenemos los pagos de esa cuota
+            List<Pago> pagos = pagoRepository.findByCuotaId(cuota.getId());
+
+            for (Pago pago : pagos) {
+                // Si hay fecha de pago y fecha de vencimiento, recalculamos
+                if (pago.getFechaPago() != null && cuota.getFechaVencimiento() != null) {
+
+                    // Calculamos la diferencia en días reales según la base de datos
+                    long diasDiferencia = ChronoUnit.DAYS.between(cuota.getFechaVencimiento(), pago.getFechaPago());
+
+                    if (diasDiferencia > 0) {
+                        pago.setDiasRetraso((int) diasDiferencia);
+                        pago.setPagoADestiempo(true);
+                    } else {
+                        pago.setDiasRetraso(0);
+                        pago.setPagoADestiempo(false);
+                    }
+                    pagoRepository.save(pago);
+                }
+            }
+        }
     }
 }

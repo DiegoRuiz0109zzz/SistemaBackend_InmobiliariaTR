@@ -2,8 +2,12 @@ package com.sistema.base.api.core.Financiamiento.Cuota;
 
 import com.sistema.base.api.core.Financiamiento.Contrato.ContratoRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
 
 @Service
@@ -39,5 +43,26 @@ public class CuotaService {
         }
 
         return cuotaRepository.save(cuota);
+    }
+
+    @Scheduled(cron = "0 0 0 * * ?")
+    @Transactional
+    public void actualizarCuotasVencidas() {
+        LocalDate hoy = LocalDate.now();
+
+        // 1. Buscamos todas las cuotas que deben dinero y su fecha ya pasó
+        // (Asegúrate de crear este método en tu CuotaRepository)
+        List<Cuota> cuotasExpiradas = cuotaRepository.findByEstadoInAndFechaVencimientoBefore(
+                Arrays.asList(EstadoCuota.PENDIENTE, EstadoCuota.PAGADO_PARCIAL),
+                hoy
+        );
+
+        // 2. Las pasamos a estado VENCIDA (o ATRASADA, según tu Enum)
+        for (Cuota cuota : cuotasExpiradas) {
+            cuota.setEstado(EstadoCuota.VENCIDO);
+        }
+
+        cuotaRepository.saveAll(cuotasExpiradas);
+        System.out.println("Cron Job: Se actualizaron " + cuotasExpiradas.size() + " cuotas a VENCIDA.");
     }
 }

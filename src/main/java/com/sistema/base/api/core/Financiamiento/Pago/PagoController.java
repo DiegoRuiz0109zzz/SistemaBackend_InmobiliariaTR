@@ -53,4 +53,14 @@ public class PagoController {
         pagoService.anularPago(id);
         return ResponseEntity.noContent().build();
     }
+
+    // =========================================================================
+    // NUEVO ENDPOINT: Recalcular días de retraso de un contrato modificado en BD
+    // =========================================================================
+    @PostMapping("/recalcular-atrasos/contrato/{contratoId}")
+    @PreAuthorize("hasAuthority('PROCESAR_PAGO')")
+    public ResponseEntity<String> recalcularAtrasos(@PathVariable Long contratoId) {
+        pagoService.recalcularAtrasosPorContrato(contratoId);
+        return ResponseEntity.ok("Sincronización y recálculo de días de retraso completado para el contrato N°: " + contratoId);
+    }
 }

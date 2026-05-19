@@ -5,5 +5,5 @@ public enum EstadoCuota {
     PAGADO_PARCIAL,
     PAGADO_TOTAL,
     VENCIDO,
-    PAGADO_DESTIEMPO
+    VENCIDA, PAGADO_DESTIEMPO
 }

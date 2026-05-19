@@ -1,5 +1,7 @@
 package com.sistema.base.api.core.Vendedores;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.sistema.base.api.entity.User;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -30,6 +32,12 @@ public class Vendedor {
 
     @Column(nullable = false, length = 20)
     private String tipoDocumento;
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "jefe_ventas_id")
+    // ✅ AGREGA ESTA LÍNEA AQUÍ
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    private User jefeVentas;
 
     @Builder.Default
     private boolean enabled = true;

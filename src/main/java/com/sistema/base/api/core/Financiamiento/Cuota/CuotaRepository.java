@@ -12,6 +12,7 @@ import java.util.List;
 @Repository
 public interface CuotaRepository extends JpaRepository<Cuota, Long> {
     List<Cuota> findByContratoIdAndEnabledTrueOrderByNumeroCuotaAsc(Long contratoId);
+    List<Cuota> findByContratoIdOrderByNumeroCuotaAsc(Long contratoId);
 
     // ==========================================
     // CONSULTAS PARA DASHBOARD
