@@ -48,19 +48,38 @@ public class Pago {
     @Builder.Default
     private boolean pagoADestiempo = false;
 
+    // ✅ NUEVO: Campos para el Comprobante (Nota de Venta)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tipo_comprobante", length = 30)
+    private TipoComprobante tipoComprobante;
+
+    @Column(name = "serie_comprobante", length = 10)
+    private String serieComprobante; // Ej: "NV01"
+
+    @Column(name = "numero_comprobante", length = 20)
+    private String numeroComprobante; // Ej: "NV01-000015"
+
+    // ✅ NUEVO: Campo para la descripción/observación del pago
+    @Column(length = 1000)
+    private String descripcion;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    @Builder.Default
-    private EstadoPago estado = EstadoPago.PROCESADO;
+    private EstadoPago estado;
 
-    @Column(name = "fecha_pago")
+    @Column(name = "fecha_pago", updatable = false)
     private LocalDate fechaPago;
 
+    @Column(name = "fecha_registro", updatable = false)
+    private LocalDate fechaRegistro;
+
     @Builder.Default
+    @Column(nullable = false)
     private boolean enabled = true;
 
     @PrePersist
     protected void onCreate() {
         fechaPago = LocalDate.now();
+        fechaRegistro = LocalDate.now();
     }
 }

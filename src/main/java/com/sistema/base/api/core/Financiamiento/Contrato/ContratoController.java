@@ -103,4 +103,18 @@ public class ContratoController {
     public ResponseEntity<Contrato> completarMedidas(@PathVariable Long id, @RequestBody ContratoRequest request) {
         return ResponseEntity.ok(contratoService.registrarMedidasYPerimetro(id, request));
     }
+
+    @GetMapping("/{id}/alerta-separacion")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Map<String, String>> obtenerAlertaSeparacion(@PathVariable Long id) {
+        String alerta = contratoService.obtenerAlertaSeparacionVencida(id);
+
+        if (alerta != null) {
+            // Si hay alerta, devuelve un JSON: { "mensaje": "La fecha límite..." }
+            return ResponseEntity.ok(Map.of("mensaje", alerta));
+        } else {
+            // Si no hay alerta (retornó null), devuelve un JSON vacío: {}
+            return ResponseEntity.ok(Map.of());
+        }
+    }
 }

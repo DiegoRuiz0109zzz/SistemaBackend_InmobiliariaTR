@@ -69,15 +69,14 @@ public class ReporteService {
 
             if (contrato.getLote() != null) {
                 numeroLote = contrato.getLote().getNumero();
-                precioOficinaLote = contrato.getLote().getPrecioVenta();
+                precioOficinaLote = contrato.getLote().getPrecioVenta() != null ? contrato.getLote().getPrecioVenta() : 0.0;
+
                 if (contrato.getLote().getManzana() != null) {
                     manzana = contrato.getLote().getManzana().getNombre();
-                    if (manzana == null) manzana = contrato.getLote().getManzana().getLetra();
+
                     if (contrato.getLote().getManzana().getEtapa() != null) {
                         etapa = contrato.getLote().getManzana().getEtapa().getNombre();
-                        if (etapa == null && contrato.getLote().getManzana().getEtapa().getNumero() != null) {
-                            etapa = contrato.getLote().getManzana().getEtapa().getNumero().toString();
-                        }
+
                         if (contrato.getLote().getManzana().getEtapa().getUrbanizacion() != null) {
                             urbanizacion = contrato.getLote().getManzana().getEtapa().getUrbanizacion().getNombre();
                         }

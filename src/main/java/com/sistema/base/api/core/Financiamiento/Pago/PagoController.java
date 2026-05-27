@@ -1,6 +1,8 @@
 package com.sistema.base.api.core.Financiamiento.Pago;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -20,31 +22,36 @@ public class PagoController {
     public ResponseEntity<List<Pago>> listarPorCuota(@PathVariable Long cuotaId) {
         return ResponseEntity.ok(pagoService.listarPorCuota(cuotaId));
     }
-
-    // ACEPTAR MULTIPART PARA REGISTRAR PAGO DIRECTO
-    @PostMapping(value = "/", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAuthority('CREAR_PAGO')")
-    public ResponseEntity<Pago> registrar(
-            @RequestParam("cuotaId") Long cuotaId,
-            @RequestParam("montoAbonado") Double montoAbonado,
-            @RequestParam("metodoPago") String metodoPago,
-            @RequestParam(value = "numeroOperacion", required = false) String numeroOperacion,
-            @RequestParam(value = "voucher", required = false) MultipartFile voucherFile) {
-
-        return ResponseEntity.ok(pagoService.registrarPago(cuotaId, montoAbonado, metodoPago, numeroOperacion, voucherFile));
+    @GetMapping("/")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<Pago>> listarPagos() {
+        return ResponseEntity.ok(pagoService.listarPagos());
     }
 
-    // ACEPTAR MULTIPART PARA PROCESAR PAGO PENDIENTE
+    @PostMapping(value = "/", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('CREAR_PAGO')")
+    public ResponseEntity<List<Pago>> registrar( // ✅ Cambiado de Pago a List<Pago>
+                                                 @RequestParam("cuotaId") Long cuotaId,
+                                                 @RequestParam("montoAbonado") Double montoAbonado,
+                                                 @RequestParam("metodoPago") String metodoPago,
+                                                 @RequestParam(value = "numeroOperacion", required = false) String numeroOperacion,
+                                                 @RequestParam(value = "descripcion", required = false) String descripcion,
+                                                 @RequestParam(value = "voucher", required = false) MultipartFile voucherFile) {
+
+        return ResponseEntity.ok(pagoService.registrarPago(cuotaId, montoAbonado, metodoPago, numeroOperacion, descripcion, voucherFile));
+    }
+
     @PutMapping(value = "/{id}/procesar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAuthority('PROCESAR_PAGO')")
-    public ResponseEntity<Pago> procesarPendiente(
-            @PathVariable Long id,
-            @RequestParam("metodoPago") String metodoPago,
-            @RequestParam(value = "numeroOperacion", required = false) String numeroOperacion,
-            @RequestParam(value = "voucher", required = false) MultipartFile voucherFile) {
+    public ResponseEntity<List<Pago>> procesarPendiente( // ✅ Cambiado de Pago a List<Pago>
+                                                         @PathVariable Long id,
+                                                         @RequestParam("metodoPago") String metodoPago,
+                                                         @RequestParam(value = "numeroOperacion", required = false) String numeroOperacion,
+                                                         @RequestParam(value = "descripcion", required = false) String descripcion,
+                                                         @RequestParam(value = "voucher", required = false) MultipartFile voucherFile) {
 
-        Pago pagoProcesado = pagoService.procesarPagoPendiente(id, metodoPago, numeroOperacion, voucherFile);
-        return ResponseEntity.ok(pagoProcesado);
+        List<Pago> pagosProcesados = pagoService.procesarPagoPendiente(id, metodoPago, numeroOperacion, descripcion, voucherFile);
+        return ResponseEntity.ok(pagosProcesados);
     }
 
     @DeleteMapping("/{id}")
@@ -62,5 +69,21 @@ public class PagoController {
     public ResponseEntity<String> recalcularAtrasos(@PathVariable Long contratoId) {
         pagoService.recalcularAtrasosPorContrato(contratoId);
         return ResponseEntity.ok("Sincronización y recálculo de días de retraso completado para el contrato N°: " + contratoId);
+    }
+
+    @GetMapping("/{id}/nota-venta")
+    @PreAuthorize("isAuthenticated()") // O el permiso específico que desees
+    public ResponseEntity<byte[]> descargarNotaVenta(@PathVariable Long id) {
+
+        // Llamamos al método que construimos en el PagoService
+        byte[] pdfBytes = pagoService.generarNotaVentaPdf(id);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(org.springframework.http.MediaType.APPLICATION_PDF);
+        // "inline" indica al navegador que debe intentar mostrar el PDF en una pestaña nueva, en lugar de forzar la descarga como un archivo
+        headers.setContentDispositionFormData("inline", "Nota_Venta_" + id + ".pdf");
+        headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
+
+        return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
     }
 }

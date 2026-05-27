@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8" />
+    <title>Nota de Abono</title>
+    <style>
+        @page { size: A4; margin: 1.5cm; }
+        body { font-family: 'Arial', sans-serif; font-size: 10pt; line-height: 1.3; color: #000; margin: 0; }
+
+        /* Layout Superior */
+        .header-table { width: 100%; margin-bottom: 20px; }
+        .logo-box { width: 30%; vertical-align: top; }
+        .company-info { width: 40%; text-align: center; font-size: 9pt; }
+        .doc-box { width: 30%; border: 1px solid #000; text-align: center; padding: 10px; }
+        .doc-title { font-size: 12pt; font-weight: bold; }
+
+        /* Info Cliente */
+        .client-info { width: 100%; margin-bottom: 20px; border-collapse: collapse; }
+        .client-info td { padding: 4px; border: none; }
+        .client-info .label { font-weight: bold; width: 15%; }
+
+        /* Tabla de Ítems */
+        .items-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        .items-table th { background-color: #0056b3; color: #fff; padding: 8px; border: 1px solid #000; text-align: center; }
+        .items-table td { border: 1px solid #000; padding: 6px; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+
+        /* Totales */
+        .totals { width: 100%; margin-top: 10px; }
+        .amount-words { font-weight: bold; width: 65%; font-size: 9pt; }
+        .total-box { width: 35%; border-collapse: collapse; }
+        .total-box td { padding: 5px; border: 1px solid #000; }
+
+        /* Observaciones */
+        .obs-box { width: 100%; margin-top: 30px; border: 1px solid #000; padding: 10px; font-size: 9pt; }
+    </style>
+</head>
+<body>
+
+<!-- CABECERA -->
+<table class="header-table">
+    <tr>
+        <td class="logo-box">
+            <img th:if="${imgLogo != null}" th:src="${imgLogo}" style="max-height: 80px; width: auto;" />
+        </td>
+        <td class="company-info">
+            <div class="company-name" style="font-size: 14pt; font-weight: bold;" th:text="${empresa != null ? empresa.razonSocial : 'NOMBRE EMPRESA'}"></div>
+            <div th:text="${empresa != null ? empresa.direccion : 'Dirección'}"></div>
+            <div th:text="'Cel: ' + ${empresa != null ? empresa.telefono : ''}"></div>
+            <div th:text="${empresa != null ? empresa.email : ''}"></div>
+        </td>
+        <td class="doc-box">
+            <div class="doc-title">NOTA DE ABONO</div>
+            <div th:text="${pagoBase.numeroComprobante}">NA01-000000</div>
+        </td>
+    </tr>
+</table>
+
+<!-- DATOS CLIENTE -->
+<table class="client-info">
+    <tr>
+        <td class="label">CLIENTE:</td>
+        <td th:text="${cliente.nombres + ' ' + cliente.apellidos}"></td>
+        <td class="label">RUC/DNI:</td>
+        <td th:text="${cliente.numeroDocumento}"></td>
+    </tr>
+    <tr>
+        <td class="label">DIRECCIÓN:</td>
+        <td th:text="${cliente.direccion}"></td>
+        <td class="label">FECHA:</td>
+        <td th:text="${#temporals.format(pagoBase.fechaPago, 'dd/MM/yyyy HH:mm')}"></td>
+    </tr>
+    <tr>
+        <td class="label">FORMA PAGO:</td>
+        <td th:text="${pagoBase.metodoPago}"></td>
+        <td class="label">MONEDA:</td>
+        <td>SOLES</td>
+    </tr>
+</table>
+
+<!-- TABLA ITEMS -->
+<table class="items-table">
+    <thead>
+    <tr>
+        <th>CANT.</th>
+        <th>U.M.</th>
+        <th>DESCRIPCIÓN</th>
+        <th>P.U.</th>
+        <th>IMPORTE</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="pago : ${pagos}">
+        <td class="text-center">1</td>
+        <td class="text-center">UNIDAD</td>
+        <td th:text="${pago.descripcion}"></td>
+        <td class="text-right" th:text="${#numbers.formatDecimal(pago.montoAbonado, 1, 'COMMA', 2, 'POINT')}"></td>
+        <td class="text-right" th:text="${#numbers.formatDecimal(pago.montoAbonado, 1, 'COMMA', 2, 'POINT')}"></td>
+    </tr>
+    </tbody>
+</table>
+
+<!-- TOTALES -->
+<table class="totals">
+    <tr>
+        <td class="amount-words" th:text="'SON: ' + ${montoEnLetras}"></td>
+        <td>
+            <table class="total-box">
+                <tr>
+                    <td><b>IMPORTE TOTAL</b></td>
+                    <td class="text-right" th:text="'S/ ' + ${#numbers.formatDecimal(totalAbonado, 1, 'COMMA', 2, 'POINT')}"></td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+
+<!-- OBSERVACIONES -->
+<div class="obs-box">
+    <strong>OBSERVACIONES:</strong><br/>
+    - Documento no válido para fines tributarios.<br/>
+    - Documento será canjeado por su comprobante de pago.
+</div>
+
+</body>
+</html>

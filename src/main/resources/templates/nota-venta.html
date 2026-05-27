@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8" />
+    <title>Nota de Venta</title>
+    <style>
+        @page {
+            size: A4;
+            margin-top: 2.5cm;
+            margin-bottom: 2.5cm;
+            margin-left: 1.91cm;
+            margin-right: 1.91cm;
+        }
+        body {
+            font-family: 'Arial', sans-serif;
+            font-size: 11pt;
+            line-height: 1.4;
+            color: #000000;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Estructuras de Tablas Auxiliares para Maquetación */
+        .table-layout {
+            width: 100%;
+            border-collapse: collapse;
+            border: none;
+            margin-bottom: 20px;
+        }
+        .table-layout td {
+            border: none;
+            padding: 0;
+            vertical-align: top;
+        }
+
+        /* Cabecera Comercial */
+        .company-name {
+            font-size: 16pt;
+            font-weight: bold;
+            color: #0f3b73;
+            margin-bottom: 3px;
+        }
+        .company-slogan {
+            font-size: 10pt;
+            font-weight: bold;
+            font-style: italic;
+            color: #555555;
+            margin-bottom: 10px;
+        }
+        .company-details {
+            font-size: 9.5pt;
+            color: #333333;
+            line-height: 1.5;
+        }
+
+        /* Recuadro de Comprobante Derecho */
+        .invoice-box {
+            width: 100%;
+            border: 2.5px solid #0f3b73;
+            text-align: center;
+            padding: 15px 0;
+            border-radius: 8px;
+            background-color: #ffffff;
+        }
+        .invoice-box h3 {
+            margin: 0;
+            font-size: 13pt;
+            font-weight: bold;
+            color: #333333;
+        }
+        .invoice-box h2 {
+            margin: 6px 0;
+            font-size: 16pt;
+            font-weight: bold;
+            color: #0f3b73;
+            letter-spacing: 0.5px;
+        }
+        .invoice-box .number {
+            margin: 0;
+            font-size: 14pt;
+            font-weight: bold;
+            color: #ff0000;
+        }
+
+        /* Bloque Informativo del Cliente */
+        .client-card {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        .client-card td {
+            border: 1px solid #cbcbcb;
+            padding: 7px 10px;
+            font-size: 10pt;
+        }
+        .client-card .label {
+            font-weight: bold;
+            background-color: #f7f9fb;
+            color: #333333;
+            width: 15%;
+        }
+        .client-card .value {
+            color: #000000;
+        }
+
+        /* Tabla Principal de Ítems (Facturación) */
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        .items-table th {
+            background-color: #0f3b73;
+            color: #ffffff;
+            border: 1px solid #0f3b73;
+            padding: 9px 10px;
+            font-size: 10pt;
+            font-weight: bold;
+            text-align: center;
+        }
+        .items-table td {
+            border: 1px solid #cbcbcb;
+            padding: 12px 10px;
+            font-size: 10pt;
+            vertical-align: middle;
+        }
+
+        /* Bloque de Cierre y Totales */
+        .amount-words {
+            font-size: 9.5pt;
+            padding: 10px;
+            background-color: #fcfcfc;
+            border: 1px solid #cbcbcb;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+
+        .totals-table {
+            width: 45%;
+            border-collapse: collapse;
+        }
+        .totals-table td {
+            padding: 7px 12px;
+            font-size: 10.5pt;
+            border: 1px solid #cbcbcb;
+        }
+        .totals-table .label-total {
+            font-weight: bold;
+            background-color: #f7f9fb;
+            width: 55%;
+        }
+        .totals-table .value-total {
+            font-weight: bold;
+            text-align: right;
+        }
+        .totals-table .row-final td {
+            background-color: #0f3b73;
+            color: #ffffff;
+            border: 1px solid #0f3b73;
+            font-size: 11.5pt;
+        }
+
+        /* Utilidades de alineación */
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .uppercase { text-transform: uppercase; }
+
+        .disclaimer {
+            margin-top: 50px;
+            font-size: 8.5pt;
+            text-align: center;
+            color: #666666;
+            border-top: 1px dashed #cbcbcb;
+            padding-top: 12px;
+        }
+    </style>
+</head>
+<body>
+
+<table class="table-layout">
+    <tr>
+        <td style="width: 55%;">
+            <div th:if="${imgLogo != null}" style="margin-bottom: 8px;">
+                <img th:src="${imgLogo}" alt="Logo Inmobiliaria" style="max-height: 65px; width: auto;" />
+            </div>
+
+            <div th:unless="${imgLogo != null}" class="company-name" th:text="${empresa != null ? empresa.razonSocial : 'INMOBILIARIA TERRANORTE S.A.C.'}">INMOBILIARIA TERRANORTE S.A.C.</div>
+
+            <div class="company-details">
+                <b>Dirección:</b> <span th:text="${empresa != null ? empresa.direccion : 'Av. Principal 123, Trujillo - Perú'}"></span><br />
+                <b>Celular:</b> <span th:text="${empresa != null ? empresa.telefono : '999 888 777'}"></span><br />
+                <b>Email:</b> <span th:text="${empresa != null ? empresa.email : 'ventas@terranorte.com.pe'}"></span><br />
+                <b>Web:</b> www.terranorte.com.pe
+            </div>
+        </td>
+        <td style="width: 5%;">&#160;</td>
+        <td style="width: 40%;">
+            <div class="invoice-box">
+                <h3 th:text="'RUC: ' + ${empresa != null ? empresa.ruc : '20123456789'}">RUC: 20123456789</h3>
+                <h2>NOTA DE VENTA</h2>
+                <div class="number" th:text="${pago.numeroComprobante}">NV01-000000</div>
+            </div>
+        </td>
+    </tr>
+</table>
+
+<table class="client-card">
+    <tr>
+        <td class="label">CLIENTE:</td>
+        <td class="value uppercase" style="width: 45%;" th:text="${cliente.nombres + ' ' + (cliente.apellidos != null ? cliente.apellidos : '')}">JUAN PEREZ</td>
+        <td class="label">RUC / DNI:</td>
+        <td class="value" style="width: 25%;" th:text="${cliente.numeroDocumento}">70820348</td>
+    </tr>
+    <tr>
+        <td class="label">DIRECCIÓN:</td>
+        <td class="value uppercase" th:text="${cliente.direccion != null ? cliente.direccion : 'No registrada'}">CALLE LAS FLORES 123</td>
+        <td class="label">FECHA EMISIÓN:</td>
+        <td class="value" th:text="${#temporals.format(pago.fechaPago, 'dd/MM/yyyy')}">22/05/2026</td>
+    </tr>
+    <tr>
+        <td class="label">FORMA PAGO:</td>
+        <td class="value uppercase" th:text="${pago.metodoPago}">TRANSFERENCIA</td>
+        <td class="label">MONEDA:</td>
+        <td class="value">SOLES (S/)</td>
+    </tr>
+</table>
+
+<table class="items-table">
+    <thead>
+    <tr>
+        <th style="width: 12%;">CANTIDAD</th>
+        <th style="width: 15%;">UNIDAD</th>
+        <th style="width: 43%;">DESCRIPCIÓN</th>
+        <th style="width: 15%;">P. UNITARIO</th>
+        <th style="width: 15%;">IMPORTE</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td class="text-center">1.00</td>
+        <td class="text-center uppercase">UNIDAD</td>
+        <td>
+            <span th:text="${pago.descripcion != null ? pago.descripcion : 'Pago de cuota - Lote ' + pago.cuota.contrato.lote.numero}">PAGO DE CUOTA INICIAL</span>
+            <div style="font-size: 8.5pt; color: #555555; margin-top: 4px;" th:if="${pago.numeroOperacion != null}">
+                <span th:text="'Nro. Operación / Voucher: ' + ${pago.numeroOperacion}"></span>
+            </div>
+        </td>
+        <td class="text-right" th:text="${#numbers.formatDecimal(pago.montoAbonado, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        <td class="text-right" th:text="${#numbers.formatDecimal(pago.montoAbonado, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+    </tr>
+    </tbody>
+</table>
+
+<div class="amount-words">
+    <b>SON:</b> <span class="uppercase" th:text="${montoEnLetras}">CERO CON 00/100 SOLES</span>
+</div>
+
+<table class="table-layout" style="margin-top: 10px;">
+    <tr>
+        <td style="width: 55%;">&#160;</td>
+        <td style="width: 45%;">
+            <table class="totals-table" style="width: 100%;">
+                <tr>
+                    <td class="label-total">OP. EXONERADA:</td>
+                    <td class="value-total" th:text="'S/ ' + ${#numbers.formatDecimal(pago.montoAbonado, 1, 'COMMA', 2, 'POINT')}">S/ 0.00</td>
+                </tr>
+                <tr>
+                    <td class="label-total">I.G.V. (0%):</td>
+                    <td class="value-total">S/ 0.00</td>
+                </tr>
+                <tr class="row-final">
+                    <td class="label-total" style="background-color: #0f3b73;">TOTAL A PAGAR:</td>
+                    <td class="value-total" style="background-color: #0f3b73;" th:text="'S/ ' + ${#numbers.formatDecimal(pago.montoAbonado, 1, 'COMMA', 2, 'POINT')}">S/ 0.00</td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+
+<div class="disclaimer">
+    Representación impresa de la Nota de Venta para control interno inmobiliario.<br />
+    Este documento certifica la correcta recepción del abono financiero en las cuentas de la empresa.
+</div>
+
+</body>
+</html>

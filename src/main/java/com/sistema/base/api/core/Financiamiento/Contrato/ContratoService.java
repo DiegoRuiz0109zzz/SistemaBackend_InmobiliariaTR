@@ -23,11 +23,11 @@ import com.sistema.base.api.core.Usuario.Clientes.Cliente;
 import com.sistema.base.api.core.Usuario.Clientes.ClienteRepository;
 import com.sistema.base.api.core.Vendedores.Vendedor;
 import com.sistema.base.api.core.Vendedores.VendedorRepository;
-import com.sistema.base.api.service.FileStorageService; // ✅ NUEVO IMPORT
+import com.sistema.base.api.service.FileStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile; // ✅ NUEVO IMPORT
+import org.springframework.web.multipart.MultipartFile;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
@@ -60,10 +60,8 @@ public class ContratoService {
     private final ContratoHistorialService contratoHistorialService;
     private final TemplateEngine templateEngine;
 
-    // ✅ INYECTAMOS EL SERVICIO DE ARCHIVOS
     private final FileStorageService fileStorageService;
 
-    // ✅ MÉTODO AUXILIAR PARA CALCULAR LA FECHA INTELIGENTE
     private LocalDate calcularSiguienteFechaVencimiento(LocalDate fechaInicial, int mesesASumar) {
         boolean esFinDeMes = fechaInicial.getDayOfMonth() == fechaInicial.lengthOfMonth();
         LocalDate fechaBase = fechaInicial.plusMonths(mesesASumar);
@@ -142,11 +140,16 @@ public class ContratoService {
         }
 
         Double abonoInicialPrometido = (req.getAbonoInicialReal() != null) ? req.getAbonoInicialReal() : 0.0;
-        if (abonoInicialPrometido >= req.getMontoInicialAcordado()) lote.setEstadoVenta(EstadoLote.VENDIDO);
-        else lote.setEstadoVenta(EstadoLote.RESERVADO);
-        loteRepository.save(lote);
 
-        EstadoContrato estadoContratoReal = (abonoInicialPrometido >= req.getMontoInicialAcordado()) ? EstadoContrato.ACTIVO : EstadoContrato.SEPARADO;
+        // ✅ CORRECCIÓN: Ahora el contrato solo nace ACTIVO si paga la inicial completa Y define el cronograma
+        boolean pagoInicialCompleto = abonoInicialPrometido >= req.getMontoInicialAcordado();
+        boolean tieneCronograma = cantidadCuotasFijas > 0;
+
+        EstadoContrato estadoContratoReal = (pagoInicialCompleto && tieneCronograma) ? EstadoContrato.ACTIVO : EstadoContrato.SEPARADO;
+        EstadoLote estadoLoteReal = (pagoInicialCompleto && tieneCronograma) ? EstadoLote.VENDIDO : EstadoLote.RESERVADO;
+
+        lote.setEstadoVenta(estadoLoteReal);
+        loteRepository.save(lote);
 
         Contrato contrato = Contrato.builder()
                 .lote(lote).cliente(cliente).coComprador(coComprador).vendedor(vendedor).cotizacionOrigen(cotizacion)
@@ -157,7 +160,7 @@ public class ContratoService {
                 .fechaInicioCronograma(req.getFechaInicioPago())
                 .estadoContrato(estadoContratoReal)
                 .fechaContrato(LocalDate.now())
-                .urlDocumentoFirmado(null) // ✅ El documento nace vacío para alertar subida
+                .urlDocumentoFirmado(null)
                 .build();
 
         Contrato contratoGuardado = contratoRepository.save(contrato);
@@ -205,29 +208,22 @@ public class ContratoService {
         return contratoGuardado;
     }
 
-    // ✅ NUEVO MÉTODO: CASOS 1 Y 2 - SUBIDA Y REEMPLAZO DE DOCUMENTOS
     @Transactional
     public Contrato subirDocumentoFirmado(Long contratoId, MultipartFile archivo, String motivo) {
         Contrato contrato = contratoRepository.findById(contratoId)
                 .orElseThrow(() -> new RuntimeException("Contrato no encontrado"));
 
-        // 1. Guardar el archivo físico (Se guarda una sola vez en disco)
-        // Eliminamos el .pdf del customName porque tu fileStorageService ya extrae la extensión original
         String customName = "CONTRATO_FIRMADO_" + contrato.getEstadoContrato() + "_" + contratoId + "_" + System.currentTimeMillis();
         String savedPath = fileStorageService.storeFileWithCustomName(archivo, "contratos-firmados", customName);
 
-        // Creamos una variable con la ruta exacta
         String rutaCompleta = "uploads/" + savedPath;
 
-        // 2. Actualizar la URL en la tabla principal
         contrato.setUrlDocumentoFirmado(rutaCompleta);
         Contrato actualizado = contratoRepository.save(contrato);
 
-        // 3. Registrar en el historial y enviarle la ruta del PDF
         String tipoHito = "DOCUMENTO_CARGADO";
         String descripcion = "Se subió el archivo firmado correspondiente al estado: " + contrato.getEstadoContrato();
 
-        // ✅ AQUÍ ESTÁ EL CAMBIO: Pasamos 'rutaCompleta' como el 5to parámetro
         contratoHistorialService.registrarHito(actualizado, tipoHito, descripcion, motivo, rutaCompleta);
 
         return actualizado;
@@ -242,25 +238,46 @@ public class ContratoService {
         return contratoGuardado;
     }
 
+    @Transactional(readOnly = true)
+    public String obtenerAlertaSeparacionVencida(Long contratoId) {
+        Contrato contrato = obtenerPorId(contratoId);
+
+        if (contrato.getEstadoContrato() != EstadoContrato.SEPARADO) {
+            return null;
+        }
+
+        Cuota cuota0 = cuotaRepository.findByContratoIdAndEnabledTrueOrderByNumeroCuotaAsc(contrato.getId())
+                .stream().filter(c -> c.getNumeroCuota() == 0).findFirst().orElse(null);
+
+        if (cuota0 != null && cuota0.getFechaVencimiento() != null) {
+            LocalDate hoy = LocalDate.now();
+            if (hoy.isAfter(cuota0.getFechaVencimiento()) && cuota0.getEstado() != EstadoCuota.PAGADO_TOTAL) {
+                long diasAtraso = ChronoUnit.DAYS.between(cuota0.getFechaVencimiento(), hoy);
+                return "La fecha límite de separación venció hace " + diasAtraso + " días (" + cuota0.getFechaVencimiento() + ").";
+            }
+        }
+        return null;
+    }
+
     @Transactional
     public Contrato actualizarContrato(Long id, ContratoRequest request) {
         Contrato contrato = contratoRepository.findById(id).orElseThrow(() -> new RuntimeException("Contrato no encontrado"));
         StringBuilder cambios = new StringBuilder();
         boolean huboCambios = false;
 
-        // Lógica de cambio de Titular, Co-Comprador y Lote...
-        if (!Objects.equals(contrato.getCliente().getId(), request.getClienteId())) {
-            Cliente nuevo = clienteRepository.findById(request.getClienteId()).orElseThrow();
+        if (request.getClienteId() != null && !Objects.equals(contrato.getCliente().getId(), request.getClienteId())) {
+            Cliente nuevo = clienteRepository.findById(request.getClienteId())
+                    .orElseThrow(() -> new RuntimeException("Cliente nuevo no encontrado"));
             cambios.append("Cambio Titular a ").append(nuevo.getNombres()).append(". ");
             contrato.setCliente(nuevo);
             huboCambios = true;
         }
 
-        // ✅ NUEVO: ACTUALIZAR FECHA DE LA CUOTA 0 (Aumentar fecha limite)
-        if (request.getFechaLimiteInicial() != null) {
-            Cuota cuota0 = cuotaRepository.findByContratoIdAndEnabledTrueOrderByNumeroCuotaAsc(contrato.getId()).stream()
-                    .filter(c -> c.getNumeroCuota() == 0).findFirst().orElse(null);
-            if (cuota0 != null && !Objects.equals(cuota0.getFechaVencimiento(), request.getFechaLimiteInicial())) {
+        Cuota cuota0 = cuotaRepository.findByContratoIdAndEnabledTrueOrderByNumeroCuotaAsc(contrato.getId()).stream()
+                .filter(c -> c.getNumeroCuota() == 0).findFirst().orElse(null);
+
+        if (request.getFechaLimiteInicial() != null && cuota0 != null) {
+            if (!Objects.equals(cuota0.getFechaVencimiento(), request.getFechaLimiteInicial())) {
                 cuota0.setFechaVencimiento(request.getFechaLimiteInicial());
                 cuotaRepository.save(cuota0);
                 cambios.append("Fecha límite inicial extendida a ").append(request.getFechaLimiteInicial()).append(". ");
@@ -268,32 +285,70 @@ public class ContratoService {
             }
         }
 
-        // ✅ NUEVO: GENERAR CRONOGRAMA SI PASA A ACTIVO POR EDICIÓN
-        if (contrato.getEstadoContrato() == EstadoContrato.ACTIVO && request.getCantidadCuotas() != null && request.getCantidadCuotas() > 0) {
-            boolean tieneCronograma = cuotaRepository.findByContratoIdAndEnabledTrueOrderByNumeroCuotaAsc(contrato.getId())
-                    .stream().anyMatch(c -> c.getNumeroCuota() > 0);
+        if (request.getMontoInicialAcordado() != null && request.getMontoInicialAcordado() > 0) {
+            Double antiguaInicial = contrato.getMontoInicial();
 
-            if (!tieneCronograma) {
-                contrato.setCantidadCuotas(request.getCantidadCuotas());
-                contrato.setFechaInicioCronograma(request.getFechaInicioPago());
+            Double montoAbonadoPrevio = (cuota0 != null && cuota0.getMontoPagado() != null) ? cuota0.getMontoPagado() : 0.0;
+            Double nuevaInicialCalculada = montoAbonadoPrevio + request.getMontoInicialAcordado();
 
-                SimulacionRequest sim = new SimulacionRequest();
-                sim.setPrecioTotal(contrato.getPrecioTotal()); sim.setMontoInicial(contrato.getMontoInicial());
-                sim.setCantidadCuotas(request.getCantidadCuotas()); sim.setFechaInicioPago(request.getFechaInicioPago());
-                sim.setCuotasEspeciales(request.getCuotasEspeciales()); sim.setMontoCuotaEspecial(request.getMontoCuotaEspecial());
+            if (!Objects.equals(antiguaInicial, nuevaInicialCalculada)) {
+                contrato.setMontoInicial(nuevaInicialCalculada);
+                contrato.setSaldoFinanciar(contrato.getPrecioTotal() - nuevaInicialCalculada);
 
-                List<CuotaPreview> proyeccion = simularCronograma(sim);
-                List<Cuota> cuotasAGuardar = new ArrayList<>();
-                for (CuotaPreview cp : proyeccion) {
-                    TipoCuota tipo = (cp.getNumeroCuota() <= (request.getCuotasEspeciales() != null ? request.getCuotasEspeciales() : 0)) ? TipoCuota.ESPECIAL : TipoCuota.MENSUAL;
-                    cuotasAGuardar.add(Cuota.builder().contrato(contrato).numeroCuota(cp.getNumeroCuota())
-                            .tipoCuota(tipo).montoTotal(cp.getMonto()).montoPagado(0.0)
-                            .fechaVencimiento(cp.getFechaVencimiento()).estado(EstadoCuota.PENDIENTE).build());
+                if (cuota0 != null) {
+                    cuota0.setMontoTotal(nuevaInicialCalculada);
+
+                    cuota0.setEstado(cuota0.getMontoPagado() > 0 ? EstadoCuota.PAGADO_PARCIAL : EstadoCuota.PENDIENTE);
+                    cuotaRepository.save(cuota0);
                 }
-                cuotaRepository.saveAll(cuotasAGuardar);
-                cambios.append("Cronograma generado tras activación. ");
+
+                cambios.append("Inicial reestructurada de S/ ").append(antiguaInicial)
+                        .append(" a S/ ").append(nuevaInicialCalculada)
+                        .append(" (Se agregaron S/ ").append(request.getMontoInicialAcordado()).append("). ");
                 huboCambios = true;
             }
+        }
+
+        if (request.getCantidadCuotas() != null && request.getCantidadCuotas() > 0) {
+            List<Cuota> cuotasAntiguas = cuotaRepository.findByContratoIdAndEnabledTrueOrderByNumeroCuotaAsc(contrato.getId())
+                    .stream().filter(c -> c.getNumeroCuota() > 0).collect(Collectors.toList());
+            if (!cuotasAntiguas.isEmpty()) {
+                cuotaRepository.deleteAll(cuotasAntiguas);
+            }
+
+            contrato.setCantidadCuotas(request.getCantidadCuotas());
+            contrato.setFechaInicioCronograma(request.getFechaInicioPago());
+
+            SimulacionRequest sim = new SimulacionRequest();
+            sim.setPrecioTotal(contrato.getPrecioTotal());
+            sim.setMontoInicial(contrato.getMontoInicial());
+            sim.setCantidadCuotas(request.getCantidadCuotas());
+            sim.setFechaInicioPago(request.getFechaInicioPago());
+            sim.setCuotasEspeciales(request.getCuotasEspeciales());
+            sim.setMontoCuotaEspecial(request.getMontoCuotaEspecial());
+
+            List<CuotaPreview> proyeccion = simularCronograma(sim);
+            List<Cuota> cuotasAGuardar = new ArrayList<>();
+            for (CuotaPreview cp : proyeccion) {
+                TipoCuota tipo = (cp.getNumeroCuota() <= (request.getCuotasEspeciales() != null ? request.getCuotasEspeciales() : 0)) ? TipoCuota.ESPECIAL : TipoCuota.MENSUAL;
+                cuotasAGuardar.add(Cuota.builder().contrato(contrato).numeroCuota(cp.getNumeroCuota())
+                        .tipoCuota(tipo).montoTotal(cp.getMonto()).montoPagado(0.0)
+                        .fechaVencimiento(cp.getFechaVencimiento()).estado(EstadoCuota.PENDIENTE).build());
+            }
+            cuotaRepository.saveAll(cuotasAGuardar);
+
+            if (contrato.getEstadoContrato() != EstadoContrato.ACTIVO) {
+                contrato.setEstadoContrato(EstadoContrato.ACTIVO);
+                contrato.setFechaContrato(LocalDate.now());
+
+                Lote lote = contrato.getLote();
+                lote.setEstadoVenta(EstadoLote.VENDIDO);
+                loteRepository.save(lote);
+                cambios.append("Cronograma generado y Contrato ACTIVADO. ");
+            } else {
+                cambios.append("Cronograma regenerado. ");
+            }
+            huboCambios = true;
         }
 
         if (huboCambios) {
@@ -327,14 +382,11 @@ public class ContratoService {
                 .findFirst()
                 .orElse(null);
 
-        // ✅ CÁLCULO DINÁMICO DE DÍAS DE VALIDEZ
         long diasValidez = 0;
         if (fechaCuotaCero != null) {
-            // Calculamos la diferencia entre hoy y el vencimiento de la separación
             diasValidez = ChronoUnit.DAYS.between(LocalDate.now(), fechaCuotaCero);
         }
 
-        //LocalDate fechaCuotaCero = cuotas.stream().filter(c -> c.getNumeroCuota() == 0).map(Cuota::getFechaVencimiento).findFirst().orElse(null);
         List<Cuota> cuotasMensuales = cuotas.stream().filter(c -> c.getNumeroCuota() > 0).collect(Collectors.toList());
         Empresa empresa = empresaRepository.findById(1L).orElse(null);
 
@@ -372,13 +424,11 @@ public class ContratoService {
         Contrato contrato = contratoRepository.findById(contratoId)
                 .orElseThrow(() -> new RuntimeException("Contrato no encontrado"));
 
-        // Calculamos el perímetro en el momento
         Double perimetro = (req.getMlFrente() != null ? req.getMlFrente() : 0.0) +
                 (req.getMlDerecha() != null ? req.getMlDerecha() : 0.0) +
                 (req.getMlIzquierda() != null ? req.getMlIzquierda() : 0.0) +
                 (req.getMlFondo() != null ? req.getMlFondo() : 0.0);
 
-        // Creamos o actualizamos la entidad de medidas
         ContratoMedidas medidas = (contrato.getMedidas() != null) ? contrato.getMedidas() : new ContratoMedidas();
 
         medidas.setContrato(contrato);
@@ -394,7 +444,6 @@ public class ContratoService {
 
         contrato.setMedidas(medidas);
 
-        // Al guardar el contrato, por CascadeType.ALL, se guarda la tabla de medidas
         return contratoRepository.save(contrato);
     }
 }
