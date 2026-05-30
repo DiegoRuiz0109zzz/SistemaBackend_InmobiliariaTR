@@ -9,4 +9,5 @@ public interface PagoRepository extends JpaRepository<Pago, Long> {
     List<Pago> findByCuotaIdAndEnabledTrue(Long cuotaId);
     List<Pago> findByCuotaId(Long cuotaId);
     List<Pago> findByNumeroComprobante(String numeroComprobante);
+    List<Pago> findByEstado(EstadoPago estado);
 }

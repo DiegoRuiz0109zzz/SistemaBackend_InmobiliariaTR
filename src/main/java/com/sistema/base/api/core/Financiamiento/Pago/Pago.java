@@ -53,9 +53,6 @@ public class Pago {
     @Column(name = "tipo_comprobante", length = 30)
     private TipoComprobante tipoComprobante;
 
-    @Column(name = "serie_comprobante", length = 10)
-    private String serieComprobante; // Ej: "NV01"
-
     @Column(name = "numero_comprobante", length = 20)
     private String numeroComprobante; // Ej: "NV01-000015"
 

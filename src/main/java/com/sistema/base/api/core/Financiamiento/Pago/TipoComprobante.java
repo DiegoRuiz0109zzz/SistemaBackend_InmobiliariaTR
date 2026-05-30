@@ -1,7 +1,7 @@
 package com.sistema.base.api.core.Financiamiento.Pago;
 
 public enum TipoComprobante {
-    NOTA_VENTA,
+    NOTA_ABONO,
     BOLETA,
     FACTURA,
     NOTA_CREDITO,
