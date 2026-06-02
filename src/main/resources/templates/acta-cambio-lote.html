@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Solicitud de Cambio de Lote</title>
+    <style>
+        @page {
+            size: A4;
+            /* Márgenes exactos de Word: Superior, Derecho, Inferior, Izquierdo */
+            margin: 2.54cm 1.9cm 2.54cm 1.9cm;
+        }
+        body {
+            font-family: 'Arial', sans-serif;
+            font-size: 11pt;
+            color: #000;
+            line-height: 1.25;
+            text-align: justify;
+        }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .bold { font-weight: bold; }
+        .uppercase { text-transform: uppercase; }
+        .underline { text-decoration: underline; }
+        .mb-1 { margin-bottom: 8px; }
+        .mb-2 { margin-bottom: 12px; }
+        .mb-3 { margin-bottom: 18px; }
+        .mt-2 { margin-top: 12px; }
+        .mt-3 { margin-top: 18px; }
+
+        .separator-line {
+            border: 0;
+            border-bottom: 1px solid #000;
+            margin: 10px 0 15px 0;
+            width: 100%;
+        }
+
+        .text-block {
+            margin-bottom: 12px;
+        }
+
+        /* Estilos específicos para la firma calcados de la imagen */
+        .signature-box {
+            width: 300px;
+            margin: 60px auto 0 auto;
+        }
+        .signature-line {
+            border-top: 1px solid #000;
+            margin-bottom: 5px;
+        }
+        .signature-text-center {
+            text-align: center;
+            font-size: 10pt;
+        }
+        .signature-text-left {
+            text-align: left;
+            font-size: 10pt;
+            margin-top: 3px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="text-right mb-3">
+    <span class="bold">ASUNTO:</span> Solicitud de Traspaso de Lote
+</div>
+
+<div class="mb-3" th:text="${fechaEmision}">
+    Olmos, 10 de noviembre del 2025
+</div>
+
+<div>
+    Sr. José Raúl Bellodas Gutiérrez,<br/>
+    Gerente General de INMOBILIARIA TERRANORT S.A.C.<br/>
+    RUC 20613699890
+</div>
+
+<hr class="separator-line" />
+
+<div class="bold mb-2">
+    Atención:
+</div>
+
+<div class="text-block">
+    Yo, <span class="bold uppercase" th:text="${cliente.nombres + ' ' + (cliente.apellidos != null ? cliente.apellidos : '')}">TINEO QUISPE FERNANDO</span>,
+    identificado(a) con <span class="bold" th:text="'DNI N.º ' + ${cliente.numeroDocumento}">DNI N.º 80666522</span>
+    por medio de la presente, me dirijo a usted para solicitar formalmente el <span class="bold underline">traspaso de lote, manteniendo mi condición de cliente:</span>
+</div>
+
+<div class="text-block">
+    <span class="bold underline">LOTE DE ORIGEN:</span><br/>
+    MZ: <span class="uppercase" th:text="${loteOrigen.manzana.nombre}">E</span><br/>
+    LT: <span class="bold" th:text="${loteOrigen.numero}">17</span><br/>
+    MONTO TOTAL APORTADO: <span class="bold" th:text="${#numbers.formatDecimal(montoAportado, 1, 'COMMA', 2, 'POINT')}">100.00</span>
+</div>
+
+<div class="text-block">
+    <span class="bold underline">LOTE DE DESTINO:</span><br/>
+    MZ: <span class="uppercase" th:text="${loteDestino.manzana.nombre}">D</span><br/>
+    LT: <span class="bold" th:text="${loteDestino.numero}">19</span>
+</div>
+
+<div class="text-block">
+    Declaro que este traspaso se realiza <span class="bold">por decisión libre y voluntaria</span>, con pleno conocimiento de las implicancias legales y contractuales que conlleva.<br/>
+    Declaro además que este cambio <span class="bold">no implica devolución de dinero ni anulación de los pagos efectuados</span>, manteniéndose los aportes ya realizados como parte del nuevo lote solicitado. El monto total del traspaso asciende a la suma de <span class="bold uppercase" th:text="'S/ ' + ${#numbers.formatDecimal(montoAportado, 1, 'COMMA', 2, 'POINT')} + ' (' + ${montoAportadoLetras} + ' SOLES)'">S/ 100.00 (CIEN Y 00/100 SOLES)</span>. La inmobiliaria reconocerá los aportes, realizando los ajustes administrativos y documentarios necesarios para reflejar dicho traspaso. En caso de existir <span class="bold">diferencias en el valor y/o metraje</span> entre ambos lotes, la empresa podrá efectuar los <span class="bold">ajustes económicos y administrativos correspondientes</span>, conforme a las condiciones y políticas vigentes. De igual manera, me comprometo a suscribir las modificaciones necesarias al contrato o documento correspondiente una vez autorizado el traspaso.<br/>
+    Soy consciente de que la presente solicitud queda sujeta a revisión y aprobación por parte de la empresa.<br/>
+    Del mismo modo, el lote de origen queda <span class="bold">libre y disponible para su inmediata comercialización</span> a terceros.
+</div>
+
+<div class="text-block mt-3">
+    Sin otro particular, agradezco su atención y quedo a la espera de una pronta respuesta.
+</div>
+
+<div class="text-block mt-3">
+    Atentamente;
+</div>
+
+<div class="signature-box">
+    <div class="signature-line"></div>
+    <div class="signature-text-center bold">COMPRADOR (A)</div>
+    <div class="signature-text-center uppercase" th:text="${cliente.nombres + ' ' + (cliente.apellidos != null ? cliente.apellidos : '')}">NOMBRE</div>
+    <div class="signature-text-center" th:text="'DNI: N° ' + ${cliente.numeroDocumento}">DNI</div>
+    <div class="signature-text-left mt-2">CEL:</div>
+    <div class="signature-text-left">EMAIL:</div>
+</div>
+
+</body>
+</html>

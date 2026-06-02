@@ -109,6 +109,8 @@ public class PagoService {
         List<Pago> pagosGenerados = new ArrayList<>();
         LocalDate fechaPagoActual = LocalDate.now();
 
+        List<String> nombresCuotasAfectadas = new ArrayList<>();
+
         for (Cuota c : cuotasPendientes) {
             if (montoRestante <= 0) break;
 
@@ -118,21 +120,23 @@ public class PagoService {
             boolean pagoADestiempo = fechaPagoActual.isAfter(c.getFechaVencimiento());
             int diasRetraso = pagoADestiempo ? (int) ChronoUnit.DAYS.between(c.getFechaVencimiento(), fechaPagoActual) : 0;
 
-            // ✅ LÓGICA DE DESCRIPCIÓN DINÁMICA (Abono vs A Cuenta vs Saldo)
             String nombreCuota = (c.getNumeroCuota() != null && c.getNumeroCuota() == 0) ? "INICIAL" : "CUOTA " + c.getNumeroCuota();
-            String descDinamica;
 
-            if (Double.compare(montoAAplicar, saldoCuota) == 0) { // Si paga todo lo que restaba de la cuota
+            if (!nombresCuotasAfectadas.contains(nombreCuota)) {
+                nombresCuotasAfectadas.add(nombreCuota);
+            }
+
+            String descDinamica;
+            if (Double.compare(montoAAplicar, saldoCuota) == 0) {
                 if (c.getMontoPagado() == 0.0) {
                     descDinamica = "ABONO DE " + nombreCuota;
                 } else {
                     descDinamica = "SALDO DE " + nombreCuota;
                 }
-            } else { // Si el monto no alcanza para pagar toda la cuota
+            } else {
                 descDinamica = "A CUENTA " + nombreCuota;
             }
 
-            // Agregamos la descripción opcional enviada por el cajero (si existe)
             if (descripcion != null && !descripcion.trim().isEmpty()) {
                 descDinamica += " - " + descripcion;
             }
@@ -142,7 +146,7 @@ public class PagoService {
                     .montoAbonado(montoAAplicar)
                     .metodoPago(metodoPago)
                     .numeroOperacion(numeroOperacion)
-                    .descripcion(descDinamica) // ✅ Asignamos la descripción inteligente
+                    .descripcion(descDinamica)
                     .fotoVoucherUrl(fotoVoucherUrl)
                     .estado(estadoDelPago)
                     .diasRetraso(diasRetraso)
@@ -157,7 +161,7 @@ public class PagoService {
                 c.setEstado(pagoADestiempo ? EstadoCuota.PAGADO_DESTIEMPO : EstadoCuota.PAGADO_TOTAL);
                 if (c.getNumeroCuota() != null && c.getNumeroCuota() == 0) {
                     contratoHistorialService.registrarHito(contrato, "INICIAL_COMPLETADA",
-                            "Inicial cancelada al 100%. Pendiente de estructuración y activación.", "Pago validado");
+                            "Inicial cancelada al 100%. Pendiente de estructuración y activación.", "Pago validado", null);
                 }
             } else {
                 c.setEstado(EstadoCuota.PAGADO_PARCIAL);
@@ -172,14 +176,19 @@ public class PagoService {
                 .stream().mapToDouble(Cuota::getMontoPagado).sum();
         if (totalPagadoHastaHoy >= 2500.0) comisionService.evaluarYGenerarComisiones(contrato);
 
+        String resumenCuotas = String.join(", ", nombresCuotasAfectadas);
+
         if (esIngresoCaja) {
             String urlVistaPrevia = "/api/pagos/recibo/" + numeroComprobanteAgrupado + "/pdf";
             contratoHistorialService.registrarHito(contrato, "INGRESO_CAJA",
-                    "Se recibió S/ " + montoAbonado + " en EFECTIVO físico. Pendiente de depósito bancario bajo el recibo " + numeroComprobanteAgrupado, "Caja", urlVistaPrevia);
+                    "Se recibió S/ " + montoAbonado + " en EFECTIVO físico correspondiente a (" + resumenCuotas + "). Pendiente de depósito bancario bajo el recibo " + numeroComprobanteAgrupado, "Caja", urlVistaPrevia);
         } else {
-            String urlVistaPrevia = "/api/pagos/comprobante/" + numeroComprobanteAgrupado + "/pdf";
-            contratoHistorialService.registrarHito(contrato, "NOTA_ABONO_CUOTAS",
-                    "Se registró un abono de S/ " + montoAbonado + " bajo el comprobante " + numeroComprobanteAgrupado, "Banco", urlVistaPrevia);
+            // ✅ SOLO SE REGISTRA EL HITO SI ES UNA NOTA DE ABONO QUE AFECTA A MÁS DE UNA CUOTA
+            if (nombresCuotasAfectadas.size() > 1) {
+                String urlVistaPrevia = "/api/pagos/comprobante/" + numeroComprobanteAgrupado + "/pdf";
+                contratoHistorialService.registrarHito(contrato, "NOTA_ABONO_CUOTAS",
+                        "Se registró un abono de S/ " + montoAbonado + " correspondiente a (" + resumenCuotas + ") bajo el comprobante " + numeroComprobanteAgrupado, "Banco", urlVistaPrevia);
+            }
         }
 
         return pagosGenerados;
@@ -221,6 +230,8 @@ public class PagoService {
         Double montoRestante = montoTotalAbonado;
         boolean esPrimerPago = true;
 
+        List<String> nombresCuotasAfectadas = new ArrayList<>();
+
         for (Cuota c : cuotasPendientes) {
             if (montoRestante <= 0) break;
 
@@ -229,6 +240,12 @@ public class PagoService {
 
             boolean pagoADestiempo = fechaDelPago.isAfter(c.getFechaVencimiento());
             int diasRetraso = pagoADestiempo ? (int) ChronoUnit.DAYS.between(c.getFechaVencimiento(), fechaDelPago) : 0;
+
+            String nombreCuota = (c.getNumeroCuota() != null && c.getNumeroCuota() == 0) ? "INICIAL" : "CUOTA " + c.getNumeroCuota();
+
+            if (!nombresCuotasAfectadas.contains(nombreCuota)) {
+                nombresCuotasAfectadas.add(nombreCuota);
+            }
 
             Pago pagoActual;
             if (esPrimerPago) {
@@ -245,10 +262,7 @@ public class PagoService {
                         .build();
             }
 
-            // ✅ LÓGICA DE DESCRIPCIÓN DINÁMICA
-            String nombreCuota = (c.getNumeroCuota() != null && c.getNumeroCuota() == 0) ? "INICIAL" : "CUOTA " + c.getNumeroCuota();
             String descDinamica;
-
             if (Double.compare(montoAAplicar, saldoCuota) == 0) {
                 if (c.getMontoPagado() == 0.0) {
                     descDinamica = "ABONO DE " + nombreCuota;
@@ -265,7 +279,7 @@ public class PagoService {
 
             pagoActual.setMetodoPago(metodoPago);
             pagoActual.setNumeroOperacion(numeroOperacion);
-            pagoActual.setDescripcion(descDinamica); // ✅ Asignamos la descripción inteligente
+            pagoActual.setDescripcion(descDinamica);
             pagoActual.setFotoVoucherUrl(fotoVoucherUrl);
             pagoActual.setEstado(estadoDelPago);
             pagoActual.setDiasRetraso(diasRetraso);
@@ -279,7 +293,7 @@ public class PagoService {
                 c.setEstado(pagoADestiempo ? EstadoCuota.PAGADO_DESTIEMPO : EstadoCuota.PAGADO_TOTAL);
                 if (c.getNumeroCuota() != null && c.getNumeroCuota() == 0) {
                     contratoHistorialService.registrarHito(contrato, "INICIAL_COMPLETADA",
-                            "Inicial cancelada al 100%. Pendiente de estructuración y activación.", "Pago validado");
+                            "Inicial cancelada al 100%. Pendiente de estructuración y activación.", "Pago validado", null);
                 }
             } else {
                 c.setEstado(EstadoCuota.PAGADO_PARCIAL);
@@ -297,14 +311,19 @@ public class PagoService {
             comisionService.evaluarYGenerarComisiones(contrato);
         }
 
+        String resumenCuotas = String.join(", ", nombresCuotasAfectadas);
+
         if (esIngresoCaja) {
             String urlVistaPrevia = "/api/pagos/recibo/" + numeroComprobanteAgrupado + "/pdf";
             contratoHistorialService.registrarHito(contrato, "INGRESO_CAJA",
-                    "Se procesó un ingreso de S/ " + montoTotalAbonado + " en EFECTIVO físico. Pendiente de depósito en caja. Recibo: " + numeroComprobanteAgrupado, "Caja", urlVistaPrevia);
+                    "Se procesó un ingreso de S/ " + montoTotalAbonado + " en EFECTIVO físico correspondiente a (" + resumenCuotas + "). Pendiente de depósito en caja. Recibo: " + numeroComprobanteAgrupado, "Caja", urlVistaPrevia);
         } else {
-            String urlVistaPrevia = "/api/pagos/comprobante/" + numeroComprobanteAgrupado + "/pdf";
-            contratoHistorialService.registrarHito(contrato, "NOTA_ABONO_CUOTAS",
-                    "Se procesó abono de S/ " + montoTotalAbonado + " tras validar transferencia bancaria. Comprobante: " + numeroComprobanteAgrupado, "Banco", urlVistaPrevia);
+            // ✅ SOLO SE REGISTRA EL HITO SI ES UNA NOTA DE ABONO QUE AFECTA A MÁS DE UNA CUOTA
+            if (nombresCuotasAfectadas.size() > 1) {
+                String urlVistaPrevia = "/api/pagos/comprobante/" + numeroComprobanteAgrupado + "/pdf";
+                contratoHistorialService.registrarHito(contrato, "NOTA_ABONO_CUOTAS",
+                        "Se procesó abono de S/ " + montoTotalAbonado + " tras validar transferencia bancaria por (" + resumenCuotas + "). Comprobante: " + numeroComprobanteAgrupado, "Banco", urlVistaPrevia);
+            }
         }
 
         return pagosProcesados;
@@ -490,7 +509,8 @@ public class PagoService {
                     contrato,
                     "RECIBO_FIRMADO",
                     "Se adjuntó el recibo físico firmado por el cliente correspondiente al ingreso " + numeroRecibo + ".",
-                    "Caja"
+                    "Caja",
+                    null
             );
         } else {
             throw new RuntimeException("Debe adjuntar un documento válido.");

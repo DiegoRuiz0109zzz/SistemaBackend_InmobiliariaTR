@@ -24,6 +24,7 @@ import com.sistema.base.api.core.Usuario.Clientes.ClienteRepository;
 import com.sistema.base.api.core.Vendedores.Vendedor;
 import com.sistema.base.api.core.Vendedores.VendedorRepository;
 import com.sistema.base.api.service.FileStorageService;
+import com.sistema.base.api.utils.NumeroALetrasConverter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -216,17 +217,39 @@ public class ContratoService {
         String customName = "CONTRATO_FIRMADO_" + contrato.getEstadoContrato() + "_" + contratoId + "_" + System.currentTimeMillis();
         String savedPath = fileStorageService.storeFileWithCustomName(archivo, "contratos-firmados", customName);
 
+        // La ruta real física que se guarda internamente en la entidad
         String rutaCompleta = "uploads/" + savedPath;
-
         contrato.setUrlDocumentoFirmado(rutaCompleta);
         Contrato actualizado = contratoRepository.save(contrato);
 
         String tipoHito = "DOCUMENTO_CARGADO";
         String descripcion = "Se subió el archivo firmado correspondiente al estado: " + contrato.getEstadoContrato();
 
-        contratoHistorialService.registrarHito(actualizado, tipoHito, descripcion, motivo, rutaCompleta);
+        // ✅ CORRECCIÓN: Mandamos la URL del Endpoint a la bitácora, no la ruta física
+        String urlVistaPreviaEndpoint = "/api/contratos/" + contratoId + "/documento-firmado";
+
+        contratoHistorialService.registrarHito(actualizado, tipoHito, descripcion, motivo, urlVistaPreviaEndpoint);
 
         return actualizado;
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] obtenerDocumentoFirmadoPdf(Long contratoId) {
+        Contrato contrato = obtenerPorId(contratoId);
+
+        if (contrato.getUrlDocumentoFirmado() == null || contrato.getUrlDocumentoFirmado().isEmpty()) {
+            throw new RuntimeException("Este contrato aún no tiene un documento firmado subido.");
+        }
+
+        try {
+            Path filePath = Paths.get(contrato.getUrlDocumentoFirmado());
+            if (!Files.exists(filePath)) {
+                throw new RuntimeException("El archivo físico no se encuentra en el servidor.");
+            }
+            return Files.readAllBytes(filePath);
+        } catch (Exception e) {
+            throw new RuntimeException("Error al leer el archivo firmado: " + e.getMessage());
+        }
     }
 
     @Transactional
@@ -259,20 +282,71 @@ public class ContratoService {
         return null;
     }
 
+    // =========================================================================================
+    // ✅ ACTUALIZACIÓN DE CONTRATO (CON LÓGICA DE BLANQUEO DE FIRMA Y NUEVO HITO "CONTRATO_ACTIVO")
+    // =========================================================================================
     @Transactional
     public Contrato actualizarContrato(Long id, ContratoRequest request) {
         Contrato contrato = contratoRepository.findById(id).orElseThrow(() -> new RuntimeException("Contrato no encontrado"));
-        StringBuilder cambios = new StringBuilder();
+        StringBuilder cambiosGenerales = new StringBuilder();
         boolean huboCambios = false;
 
+        boolean seActivoContrato = false;
+        boolean seRegeneroCronograma = false;
+
+        // =====================================================
+        // CASO 1: CAMBIO DE TITULAR
+        // =====================================================
         if (request.getClienteId() != null && !Objects.equals(contrato.getCliente().getId(), request.getClienteId())) {
-            Cliente nuevo = clienteRepository.findById(request.getClienteId())
+            Cliente titularAnterior = contrato.getCliente();
+            Long anteriorClienteId = titularAnterior.getId();
+            String nombreAnterior = titularAnterior.getNombres() + " " + (titularAnterior.getApellidos() != null ? titularAnterior.getApellidos() : "");
+
+            Cliente nuevoTitular = clienteRepository.findById(request.getClienteId())
                     .orElseThrow(() -> new RuntimeException("Cliente nuevo no encontrado"));
-            cambios.append("Cambio Titular a ").append(nuevo.getNombres()).append(". ");
-            contrato.setCliente(nuevo);
+            String nombreNuevo = nuevoTitular.getNombres() + " " + (nuevoTitular.getApellidos() != null ? nuevoTitular.getApellidos() : "");
+
+            contrato.setCliente(nuevoTitular);
             huboCambios = true;
+
+            String urlVistaPreviaActa = "/api/contratos/" + id + "/acta-traspaso-titular?anteriorClienteId=" + anteriorClienteId + "&nuevoClienteId=" + request.getClienteId();
+            String descripcionActa = "Se generó y guardó el Acta de Solicitud de Traspaso. Cambio de titular de " + nombreAnterior + " a favor de " + nombreNuevo + ".";
+
+            contratoHistorialService.registrarHito(contrato, "ACTA_GENERADA", descripcionActa, "Trámites", urlVistaPreviaActa);
         }
 
+        // =====================================================
+        // CASO 2: CAMBIO DE LOTE
+        // =====================================================
+        if (request.getLoteId() != null && !Objects.equals(contrato.getLote().getId(), request.getLoteId())) {
+            Lote loteOrigen = contrato.getLote();
+            Lote loteDestino = loteRepository.findById(request.getLoteId())
+                    .orElseThrow(() -> new RuntimeException("Lote de destino no encontrado."));
+
+            Long loteOrigenId = loteOrigen.getId();
+
+            loteOrigen.setEstadoVenta(EstadoLote.DISPONIBLE);
+            loteRepository.save(loteOrigen);
+
+            EstadoLote nuevoEstadoLote = (contrato.getEstadoContrato() == EstadoContrato.SEPARADO)
+                    ? EstadoLote.RESERVADO
+                    : EstadoLote.VENDIDO;
+
+            loteDestino.setEstadoVenta(nuevoEstadoLote);
+            loteRepository.save(loteDestino);
+
+            contrato.setLote(loteDestino);
+            huboCambios = true;
+
+            String urlVistaPreviaActa = "/api/contratos/" + id + "/acta-cambio-lote?loteOrigenId=" + loteOrigenId + "&loteDestinoId=" + request.getLoteId();
+            String descripcionActa = "Se generó y guardó el Acta de Cambio de Lote. Origen: Mz " + loteOrigen.getManzana().getNombre() + " Lt " + loteOrigen.getNumero() + " -> Destino: Mz " + loteDestino.getManzana().getNombre() + " Lt " + loteDestino.getNumero();
+
+            contratoHistorialService.registrarHito(contrato, "ACTA_GENERADA", descripcionActa, "Trámites", urlVistaPreviaActa);
+        }
+
+        // =====================================================
+        // OTRAS MODIFICACIONES (Montos, Fechas)
+        // =====================================================
         Cuota cuota0 = cuotaRepository.findByContratoIdAndEnabledTrueOrderByNumeroCuotaAsc(contrato.getId()).stream()
                 .filter(c -> c.getNumeroCuota() == 0).findFirst().orElse(null);
 
@@ -280,14 +354,13 @@ public class ContratoService {
             if (!Objects.equals(cuota0.getFechaVencimiento(), request.getFechaLimiteInicial())) {
                 cuota0.setFechaVencimiento(request.getFechaLimiteInicial());
                 cuotaRepository.save(cuota0);
-                cambios.append("Fecha límite inicial extendida a ").append(request.getFechaLimiteInicial()).append(". ");
+                cambiosGenerales.append("Fecha límite inicial extendida a ").append(request.getFechaLimiteInicial()).append(". ");
                 huboCambios = true;
             }
         }
 
         if (request.getMontoInicialAcordado() != null && request.getMontoInicialAcordado() > 0) {
             Double antiguaInicial = contrato.getMontoInicial();
-
             Double montoAbonadoPrevio = (cuota0 != null && cuota0.getMontoPagado() != null) ? cuota0.getMontoPagado() : 0.0;
             Double nuevaInicialCalculada = montoAbonadoPrevio + request.getMontoInicialAcordado();
 
@@ -297,18 +370,20 @@ public class ContratoService {
 
                 if (cuota0 != null) {
                     cuota0.setMontoTotal(nuevaInicialCalculada);
-
                     cuota0.setEstado(cuota0.getMontoPagado() > 0 ? EstadoCuota.PAGADO_PARCIAL : EstadoCuota.PENDIENTE);
                     cuotaRepository.save(cuota0);
                 }
 
-                cambios.append("Inicial reestructurada de S/ ").append(antiguaInicial)
+                cambiosGenerales.append("Inicial reestructurada de S/ ").append(antiguaInicial)
                         .append(" a S/ ").append(nuevaInicialCalculada)
                         .append(" (Se agregaron S/ ").append(request.getMontoInicialAcordado()).append("). ");
                 huboCambios = true;
             }
         }
 
+        // =====================================================
+        // GENERACIÓN Y REGENERACIÓN DE CRONOGRAMA
+        // =====================================================
         if (request.getCantidadCuotas() != null && request.getCantidadCuotas() > 0) {
             List<Cuota> cuotasAntiguas = cuotaRepository.findByContratoIdAndEnabledTrueOrderByNumeroCuotaAsc(contrato.getId())
                     .stream().filter(c -> c.getNumeroCuota() > 0).collect(Collectors.toList());
@@ -337,23 +412,42 @@ public class ContratoService {
             }
             cuotaRepository.saveAll(cuotasAGuardar);
 
+            // ✅ AL CAMBIAR CRONOGRAMA: El documento firmado anterior ya NO es válido y se requiere uno nuevo
+            contrato.setUrlDocumentoFirmado(null);
+            contrato.setFechaContrato(LocalDate.now());
+
             if (contrato.getEstadoContrato() != EstadoContrato.ACTIVO) {
                 contrato.setEstadoContrato(EstadoContrato.ACTIVO);
-                contrato.setFechaContrato(LocalDate.now());
 
                 Lote lote = contrato.getLote();
                 lote.setEstadoVenta(EstadoLote.VENDIDO);
                 loteRepository.save(lote);
-                cambios.append("Cronograma generado y Contrato ACTIVADO. ");
+
+                seActivoContrato = true; // Levantamos bandera de activación
             } else {
-                cambios.append("Cronograma regenerado. ");
+                seRegeneroCronograma = true; // Levantamos bandera de regeneración
             }
             huboCambios = true;
         }
 
+        // =====================================================
+        // GUARDADO DE CONTRATO Y REGISTRO DE HITOS
+        // =====================================================
         if (huboCambios) {
             Contrato actualizado = contratoRepository.save(contrato);
-            contratoHistorialService.registrarHito(actualizado, "MODIFICACION", cambios.toString().trim(), request.getObservacion());
+
+            // Hito explícito para la activación o nuevo cronograma
+            if (seActivoContrato) {
+                contratoHistorialService.registrarHito(actualizado, "CONTRATO_ACTIVO", "Contrato Activo registrado. Pendiente de documento firmado.", request.getObservacion(), null);
+            } else if (seRegeneroCronograma) {
+                contratoHistorialService.registrarHito(actualizado, "CONTRATO_ACTIVO", "Cronograma regenerado. Pendiente de nuevo documento firmado.", request.getObservacion(), null);
+            }
+
+            // Si además hubo cambios operativos menores (montos iniciales o fechas de límite), los registramos genéricamente sin acta
+            if (cambiosGenerales.length() > 0) {
+                contratoHistorialService.registrarHito(actualizado, "MODIFICACION", cambiosGenerales.toString().trim(), request.getObservacion(), null);
+            }
+
             return actualizado;
         }
         return contrato;
@@ -445,5 +539,92 @@ public class ContratoService {
         contrato.setMedidas(medidas);
 
         return contratoRepository.save(contrato);
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] generarActaTraspasoTitularPdf(Long contratoId, Long anteriorClienteId, Long nuevoClienteId) {
+        Contrato contrato = obtenerPorId(contratoId);
+        Cliente titularActual = clienteRepository.findById(anteriorClienteId)
+                .orElseThrow(() -> new RuntimeException("El titular original no existe en la base de datos."));
+        Cliente nuevoTitular = clienteRepository.findById(nuevoClienteId)
+                .orElseThrow(() -> new RuntimeException("El nuevo cliente no existe en la base de datos."));
+
+        List<Cuota> cuotas = cuotaRepository.findByContratoIdAndEnabledTrueOrderByNumeroCuotaAsc(contratoId);
+        double montoAportado = cuotas.stream().mapToDouble(Cuota::getMontoPagado).sum();
+
+        LocalDate hoy = LocalDate.now();
+        String[] meses = {"enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"};
+        String fechaFormateada = "Olmos, " + hoy.getDayOfMonth() + " de " + meses[hoy.getMonthValue() - 1] + " del " + hoy.getYear();
+
+        String areaTotal = "110.26";
+        try {
+            if (contrato.getMedidas() != null && contrato.getMedidas().getMlFrente() != null && contrato.getMedidas().getMlDerecha() != null) {
+                double calculo = contrato.getMedidas().getMlFrente() * contrato.getMedidas().getMlDerecha();
+                areaTotal = String.format(java.util.Locale.US, "%.2f", calculo);
+            }
+        } catch(Exception ignored) {}
+
+        Context context = new Context();
+        context.setVariable("contrato", contrato);
+        context.setVariable("titularActual", titularActual);
+        context.setVariable("nuevoTitular", nuevoTitular);
+        context.setVariable("montoAportado", montoAportado);
+        context.setVariable("montoAportadoLetras", NumeroALetrasConverter.convertir(montoAportado, ""));
+        context.setVariable("fechaEmision", fechaFormateada);
+        context.setVariable("areaTotal", areaTotal);
+
+        String htmlContenido = templateEngine.process("acta-traspaso", context);
+
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            PdfRendererBuilder builder = new PdfRendererBuilder();
+            builder.useFastMode();
+            builder.withHtmlContent(htmlContenido, null);
+            builder.toStream(outputStream);
+            builder.run();
+            // Retornamos el array de bytes directamente sin pasar por el disco duro
+            return outputStream.toByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException("Error al compilar Acta de Traspaso PDF en memoria: " + e.getMessage());
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] generarActaCambioLotePdf(Long contratoId, Long loteOrigenId, Long loteDestinoId) {
+        Contrato contrato = obtenerPorId(contratoId);
+        Cliente cliente = contrato.getCliente();
+
+        Lote loteOrigen = loteRepository.findById(loteOrigenId)
+                .orElseThrow(() -> new RuntimeException("El lote de origen no existe."));
+        Lote loteDestino = loteRepository.findById(loteDestinoId)
+                .orElseThrow(() -> new RuntimeException("El lote de destino no existe."));
+
+        List<Cuota> cuotas = cuotaRepository.findByContratoIdAndEnabledTrueOrderByNumeroCuotaAsc(contratoId);
+        double montoAportado = cuotas.stream().mapToDouble(Cuota::getMontoPagado).sum();
+
+        LocalDate hoy = LocalDate.now();
+        String[] meses = {"enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"};
+        String fechaFormateada = "Olmos, " + hoy.getDayOfMonth() + " de " + meses[hoy.getMonthValue() - 1] + " del " + hoy.getYear();
+
+        Context context = new Context();
+        context.setVariable("cliente", cliente);
+        context.setVariable("loteOrigen", loteOrigen);
+        context.setVariable("loteDestino", loteDestino);
+        context.setVariable("montoAportado", montoAportado);
+        context.setVariable("montoAportadoLetras", NumeroALetrasConverter.convertir(montoAportado, ""));
+        context.setVariable("fechaEmision", fechaFormateada);
+
+        String htmlContenido = templateEngine.process("acta-cambio-lote", context);
+
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            PdfRendererBuilder builder = new PdfRendererBuilder();
+            builder.useFastMode();
+            builder.withHtmlContent(htmlContenido, null);
+            builder.toStream(outputStream);
+            builder.run();
+            // Retornamos el array de bytes directamente sin pasar por el disco duro
+            return outputStream.toByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException("Error al compilar Acta de Cambio de Lote PDF en memoria: " + e.getMessage());
+        }
     }
 }

@@ -30,7 +30,6 @@ public class Comision {
     @JsonIgnoreProperties({"historiales", "medidas", "hibernateLazyInitializer", "handler"})
     private Contrato contrato;
 
-    // --- IDENTIFICACIÓN DEL BENEFICIARIO ---
     @Enumerated(EnumType.STRING)
     @Column(name = "rol_beneficiario", nullable = false, length = 20)
     private RolComision rolBeneficiario;
@@ -45,7 +44,6 @@ public class Comision {
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private User jefeVentas;
 
-    // ✅ NUEVO: DATOS DE LA VENTA (Auditoría)
     @Column(name = "precio_oficina_lote")
     private Double precioOficinaLote;
 
@@ -57,7 +55,14 @@ public class Comision {
 
     // --- DESGLOSE ECONÓMICO INDIVIDUAL ---
     @Column(name = "monto_base", nullable = false)
-    private Double montoBase;
+    private Double montoBase; // Solo será 400 para quien haga la venta directa
+
+    // ✅ NUEVA COLUMNA: Bono Global (Exclusivo para el Jefe de Ventas)
+    @Column(name = "monto_bono_global", nullable = false)
+    private Double montoBonoGlobal; // Será 100 para el jefe, 0 para el vendedor
+
+    @Column(name = "porcentaje_bono_diferencia")
+    private Double porcentajeBonoDiferencia;
 
     @Column(name = "monto_bono_diferencia", nullable = false)
     private Double montoBonoDiferencia;
@@ -76,7 +81,6 @@ public class Comision {
     @Column(name = "fecha_pago")
     private LocalDateTime fechaPago;
 
-    // --- FECHAS DE SISTEMA ---
     @Column(name = "fecha_generacion", nullable = false, updatable = false)
     private LocalDate fechaGeneracion;
 
