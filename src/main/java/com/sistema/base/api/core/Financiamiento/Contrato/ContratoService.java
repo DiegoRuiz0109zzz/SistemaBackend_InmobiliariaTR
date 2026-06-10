@@ -225,10 +225,9 @@ public class ContratoService {
         String tipoHito = "DOCUMENTO_CARGADO";
         String descripcion = "Se subió el archivo firmado correspondiente al estado: " + contrato.getEstadoContrato();
 
-        // ✅ CORRECCIÓN: Mandamos la URL del Endpoint a la bitácora, no la ruta física
-        String urlVistaPreviaEndpoint = "/api/contratos/" + contratoId + "/documento-firmado";
-
-        contratoHistorialService.registrarHito(actualizado, tipoHito, descripcion, motivo, urlVistaPreviaEndpoint);
+        // ✅ CORRECCIÓN: Volvemos a mandar la ruta física real (Ej: "uploads/contratos-firmados/...")
+        // a la bitácora, ya que tu frontend lee los archivos subidos directamente desde ahí.
+        contratoHistorialService.registrarHito(actualizado, tipoHito, descripcion, motivo, rutaCompleta);
 
         return actualizado;
     }

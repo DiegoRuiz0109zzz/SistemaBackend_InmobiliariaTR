@@ -18,6 +18,12 @@ import com.sistema.base.api.core.Usuario.Clientes.Cliente;
 import com.sistema.base.api.service.FileStorageService;
 import com.sistema.base.api.utils.NumeroALetrasConverter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import jakarta.persistence.criteria.Predicate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -52,8 +58,40 @@ public class PagoService {
     }
 
     @Transactional(readOnly = true)
-    public List<Pago> listarPagos() {
-        return pagoRepository.findAll();
+    public Page<Pago> listarPagosPaginadosConFiltros(
+            int page, int size,
+            String metodoPago,
+            TipoComprobante tipoComprobante,
+            EstadoPago estado,
+            LocalDate fechaDesde,
+            LocalDate fechaHasta) {
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
+
+        Specification<Pago> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            // Filtro 1: Método de Pago (Ej: "EFECTIVO", "TRANSFERENCIA")
+            if (metodoPago != null && !metodoPago.trim().isEmpty()) {
+                predicates.add(cb.equal(root.get("metodoPago"), metodoPago));
+            }
+            if (tipoComprobante != null) {
+                predicates.add(cb.equal(root.get("tipoComprobante"), tipoComprobante));
+            }
+            if (estado != null) {
+                predicates.add(cb.equal(root.get("estado"), estado));
+            }
+            if (fechaDesde != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("fechaPago"), fechaDesde));
+            }
+
+            if (fechaHasta != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("fechaPago"), fechaHasta));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        return pagoRepository.findAll(spec, pageable);
     }
 
     private String generarNombreVoucher(Cliente cliente, MultipartFile file) {
@@ -503,14 +541,16 @@ public class PagoService {
             String cleanName = org.springframework.util.StringUtils.cleanPath(archivoFirmado.getOriginalFilename()).replaceAll("[\\s+]", "_");
             String customName = "FIRMADO_" + numeroRecibo + "_" + cleanName;
 
+            // Esta es la ruta física real donde se guardó el PDF escaneado/foto
             String savedPath = "uploads/" + fileStorageService.storeFileWithCustomName(archivoFirmado, "recibos_firmados", customName);
 
+            // ✅ CORRECCIÓN: Pasamos 'savedPath' en lugar de 'null' para que el frontend pueda visualizarlo
             contratoHistorialService.registrarHito(
                     contrato,
                     "RECIBO_FIRMADO",
                     "Se adjuntó el recibo físico firmado por el cliente correspondiente al ingreso " + numeroRecibo + ".",
                     "Caja",
-                    null
+                    savedPath
             );
         } else {
             throw new RuntimeException("Debe adjuntar un documento válido.");

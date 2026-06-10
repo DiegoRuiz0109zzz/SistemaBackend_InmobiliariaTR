@@ -1,6 +1,8 @@
 package com.sistema.base.api.core.Financiamiento.Pago;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -8,6 +10,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -25,8 +29,20 @@ public class PagoController {
 
     @GetMapping("/")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<List<Pago>> listarPagos() {
-        return ResponseEntity.ok(pagoService.listarPagos());
+    public ResponseEntity<Page<Pago>> listarPagos(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String metodoPago,
+            @RequestParam(required = false) TipoComprobante tipoComprobante,
+            @RequestParam(required = false) EstadoPago estado,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaDesde,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaHasta) {
+
+        Page<Pago> pagosPaginados = pagoService.listarPagosPaginadosConFiltros(
+                page, size, metodoPago, tipoComprobante, estado, fechaDesde, fechaHasta
+        );
+
+        return ResponseEntity.ok(pagosPaginados);
     }
 
     @PostMapping(value = "/", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
