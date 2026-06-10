@@ -38,7 +38,7 @@ public class ReporteService {
                         && cuota.getFechaVencimiento() != null && cuota.getFechaVencimiento().isBefore(hoy)) {
                     cuotasVencidas++;
                 } else if (cuota.getEstado() == EstadoCuota.VENCIDO || cuota.getEstado() == EstadoCuota.VENCIDA) {
-                    // Por si acaso existen estados vencidos explícitamente en BD
+                    // Por si acaso existen estados vencidos explï¿½citamente en BD
                     cuotasVencidas++;
                 } else {
                     cuotasPendientes++;

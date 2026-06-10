@@ -21,7 +21,6 @@ public class ComisionService {
             return;
         }
 
-        // ✅ Cálculos de Diferencia (Ahora sí los guardaremos)
         Double precioOficina = contrato.getLote().getPrecioVenta() != null ? contrato.getLote().getPrecioVenta() : 0.0;
         Double precioVenta = contrato.getPrecioTotal() != null ? contrato.getPrecioTotal() : 0.0;
         Double diferencia = Math.max(0, precioVenta - precioOficina);
@@ -29,70 +28,82 @@ public class ComisionService {
         Vendedor vendedor = contrato.getVendedor();
         User jefe = vendedor != null ? vendedor.getJefeVentas() : null;
 
+        // Si el vendedor no tiene un jefe asignado, significa que él mismo es el Jefe de Ventas
         boolean esVentaDirectaJefe = (jefe == null);
 
         if (esVentaDirectaJefe) {
             // =========================================================
-            // ESCENARIO 2: VENTA DIRECTA DEL JEFE
+            // ESCENARIO 1: VENTA DIRECTA DEL JEFE (1 SOLO REGISTRO)
             // =========================================================
-            Double baseTotal = 400.0 + 100.0;
-            Double bonoDiffTotal = (diferencia * 0.35) + (diferencia * 0.15);
-            Double comisionTotal = baseTotal + bonoDiffTotal;
 
-            Comision comisionJefe = Comision.builder()
+            Double baseJefe = 400.0; // Gana la base por hacer la venta
+            Double bonoGlobalJefe = 100.0; // Gana el bono global por su rol
+            Double porcentajeTotal = 50.0; // Suma del 35% (venta) + 15% (jefatura)
+            Double bonoDiffTotal = diferencia * 0.50;
+            Double totalComisionJefe = baseJefe + bonoGlobalJefe + bonoDiffTotal;
+
+            Comision comisionUnica = Comision.builder()
                     .contrato(contrato)
-                    .rolBeneficiario(RolComision.JEFE_VENTAS)
+                    .rolBeneficiario(RolComision.JEFE_VENTAS) // O VENDEDOR, según prefieras que se muestre en tu tabla
                     .vendedor(vendedor)
                     .jefeVentas(null)
-                    .precioOficinaLote(precioOficina) // ✅ GUARDADO
-                    .precioVentaContrato(precioVenta) // ✅ GUARDADO
-                    .diferenciaPrecio(diferencia)     // ✅ GUARDADO
-                    .montoBase(baseTotal)
+                    .precioOficinaLote(precioOficina)
+                    .precioVentaContrato(precioVenta)
+                    .diferenciaPrecio(diferencia)
+                    .montoBase(baseJefe) // ✅ 400
+                    .montoBonoGlobal(bonoGlobalJefe) // ✅ 100
+                    .porcentajeBonoDiferencia(porcentajeTotal) // ✅ 50% explícito
                     .montoBonoDiferencia(bonoDiffTotal)
-                    .totalComision(comisionTotal)
+                    .totalComision(totalComisionJefe)
                     .estadoPago(EstadoComision.PENDIENTE)
                     .build();
-            comisionRepository.save(comisionJefe);
+            comisionRepository.save(comisionUnica);
 
         } else {
             // =========================================================
-            // ESCENARIO 1: VENTA NORMAL (Vendedor + Jefe)
+            // ESCENARIO 2: VENTA NORMAL (Vendedor + Jefe en 2 registros)
             // =========================================================
 
-            // A) Comisión del Vendedor
+            // A) Comisión exclusiva del Vendedor
             Double baseVendedor = 400.0;
+            Double bonoGlobalVendedor = 0.0;
             Double bonoDiffVendedor = diferencia * 0.35;
-            Double totalVendedor = baseVendedor + bonoDiffVendedor;
+            Double totalVendedor = baseVendedor + bonoGlobalVendedor + bonoDiffVendedor;
 
             Comision comisionVendedor = Comision.builder()
                     .contrato(contrato)
                     .rolBeneficiario(RolComision.VENDEDOR)
                     .vendedor(vendedor)
-                    .jefeVentas(null)
-                    .precioOficinaLote(precioOficina) // ✅ GUARDADO
-                    .precioVentaContrato(precioVenta) // ✅ GUARDADO
-                    .diferenciaPrecio(diferencia)     // ✅ GUARDADO
-                    .montoBase(baseVendedor)
+                    .jefeVentas(jefe)
+                    .precioOficinaLote(precioOficina)
+                    .precioVentaContrato(precioVenta)
+                    .diferenciaPrecio(diferencia)
+                    .montoBase(baseVendedor) // ✅ 400
+                    .montoBonoGlobal(bonoGlobalVendedor) // ✅ 0
+                    .porcentajeBonoDiferencia(35.0) // ✅ 35%
                     .montoBonoDiferencia(bonoDiffVendedor)
                     .totalComision(totalVendedor)
                     .estadoPago(EstadoComision.PENDIENTE)
                     .build();
             comisionRepository.save(comisionVendedor);
 
-            // B) Comisión del Jefe (Bono Global + Porcentaje)
-            Double baseJefe = 100.0;
+            // B) Comisión exclusiva del Jefe
+            Double baseJefe = 0.0;
+            Double bonoGlobalJefe = 100.0;
             Double bonoDiffJefe = diferencia * 0.15;
-            Double totalJefe = baseJefe + bonoDiffJefe;
+            Double totalJefe = baseJefe + bonoGlobalJefe + bonoDiffJefe;
 
             Comision comisionJefe = Comision.builder()
                     .contrato(contrato)
                     .rolBeneficiario(RolComision.JEFE_VENTAS)
-                    .vendedor(null)
+                    .vendedor(vendedor)
                     .jefeVentas(jefe)
-                    .precioOficinaLote(precioOficina) // ✅ GUARDADO
-                    .precioVentaContrato(precioVenta) // ✅ GUARDADO
-                    .diferenciaPrecio(diferencia)     // ✅ GUARDADO
-                    .montoBase(baseJefe)
+                    .precioOficinaLote(precioOficina)
+                    .precioVentaContrato(precioVenta)
+                    .diferenciaPrecio(diferencia)
+                    .montoBase(baseJefe) // ✅ 0
+                    .montoBonoGlobal(bonoGlobalJefe) // ✅ 100
+                    .porcentajeBonoDiferencia(15.0) // ✅ 15%
                     .montoBonoDiferencia(bonoDiffJefe)
                     .totalComision(totalJefe)
                     .estadoPago(EstadoComision.PENDIENTE)

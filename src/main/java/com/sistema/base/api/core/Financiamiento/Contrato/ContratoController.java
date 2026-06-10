@@ -40,21 +40,18 @@ public class ContratoController {
         return ResponseEntity.ok(contratoService.simularCronograma(request));
     }
 
-    // 1. CREA EL CONTRATO EN BASE DE DATOS (Y genera Hito Automático en Bitácora)
     @PostMapping("/")
     @PreAuthorize("hasAuthority('CREAR_CONTRATO')")
     public ResponseEntity<Contrato> crear(@RequestBody ContratoRequest request) {
         return ResponseEntity.ok(contratoService.generarContrato(request));
     }
 
-    // 2. ENDPOINT PARA ACTUALIZAR DATOS (Detecta cambios y genera hito de MODIFICACIÓN)
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('EDITAR_CONTRATO')")
     public ResponseEntity<Contrato> actualizar(@PathVariable Long id, @RequestBody ContratoRequest request) {
         return ResponseEntity.ok(contratoService.actualizarContrato(id, request));
     }
 
-    // ✅ 3. NUEVO ENDPOINT: SUBIR O REEMPLAZAR DOCUMENTO FIRMADO (PDF)
     @PostMapping(value = "/{id}/subir-documento", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAuthority('EDITAR_CONTRATO')") // O el permiso que consideres adecuado
     public ResponseEntity<?> subirDocumentoFirmado(
@@ -69,7 +66,6 @@ public class ContratoController {
         }
     }
 
-    // 4. ENDPOINT QUE REGISTRA EL HITO OFICIAL Y ACTUALIZA LA FECHA (Reemplaza a generar-documento)
     @PostMapping("/{id}/registrar-hito-oficial")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<?> registrarHitoOficial(@PathVariable Long id) {
@@ -83,7 +79,6 @@ public class ContratoController {
         }
     }
 
-    // 5. LA VISTA PREVIA SIGUE SIENDO EL MOTOR PARA VER EL PDF AL VUELO
     @GetMapping("/{id}/vista-previa")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<byte[]> vistaPreviaContrato(@PathVariable Long id) {
@@ -91,7 +86,6 @@ public class ContratoController {
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_PDF);
-        // "inline" permite que se abra en el navegador sin descargarlo obligatoriamente
         headers.setContentDispositionFormData("inline", "Vista_Previa_Contrato_" + id + ".pdf");
         headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
 
@@ -102,5 +96,71 @@ public class ContratoController {
     @PreAuthorize("hasAuthority('EDITAR_CONTRATO')")
     public ResponseEntity<Contrato> completarMedidas(@PathVariable Long id, @RequestBody ContratoRequest request) {
         return ResponseEntity.ok(contratoService.registrarMedidasYPerimetro(id, request));
+    }
+
+    @GetMapping("/{id}/alerta-separacion")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Map<String, String>> obtenerAlertaSeparacion(@PathVariable Long id) {
+        String alerta = contratoService.obtenerAlertaSeparacionVencida(id);
+
+        if (alerta != null) {
+            return ResponseEntity.ok(Map.of("mensaje", alerta));
+        } else {
+            return ResponseEntity.ok(Map.of());
+        }
+    }
+
+    @GetMapping("/{id}/acta-traspaso-titular")
+    @PreAuthorize("hasAuthority('EDITAR_CONTRATO')")
+    public ResponseEntity<byte[]> descargarActaTraspasoTitular(
+            @PathVariable Long id,
+            @RequestParam("anteriorClienteId") Long anteriorClienteId,
+            @RequestParam("nuevoClienteId") Long nuevoClienteId) {
+
+        byte[] pdfBytes = contratoService.generarActaTraspasoTitularPdf(id, anteriorClienteId, nuevoClienteId);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_PDF);
+        headers.setContentDispositionFormData("inline", "Acta_Traspaso_Titular_" + id + ".pdf");
+        headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
+
+        return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
+    }
+
+    @GetMapping("/{id}/acta-cambio-lote")
+    @PreAuthorize("hasAuthority('EDITAR_CONTRATO')")
+    public ResponseEntity<byte[]> descargarActaCambioLote(
+            @PathVariable Long id,
+            @RequestParam("loteOrigenId") Long loteOrigenId,
+            @RequestParam("loteDestinoId") Long loteDestinoId) {
+
+        byte[] pdfBytes = contratoService.generarActaCambioLotePdf(id, loteOrigenId, loteDestinoId);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_PDF);
+        headers.setContentDispositionFormData("inline", "Acta_Cambio_Lote_" + id + ".pdf");
+        headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
+
+        return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
+    }
+
+    @GetMapping("/{id}/documento-firmado")
+    @PreAuthorize("isAuthenticated()") // O el permiso que consideres adecuado
+    public ResponseEntity<byte[]> verDocumentoFirmado(@PathVariable Long id) {
+        try {
+            byte[] pdfBytes = contratoService.obtenerDocumentoFirmadoPdf(id);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_PDF);
+            // "inline" hace que se visualice en la pantalla sin forzar descarga
+            headers.setContentDispositionFormData("inline", "Contrato_Firmado_" + id + ".pdf");
+            headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
+
+            return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
+
+        } catch (RuntimeException e) {
+            // Si el archivo no existe, retornamos un 404 Not Found limpio
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        }
     }
 }

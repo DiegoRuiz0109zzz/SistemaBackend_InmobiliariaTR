@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Solicitud de Traspaso de Lote</title>
+    <style>
+        @page {
+            size: A4;
+            /* Márgenes extraídos de tu configuración de Word: Superior, Derecho, Inferior, Izquierdo */
+            margin: 2.54cm 1.9cm 2.54cm 1.9cm;
+        }
+        body {
+            font-family: 'Arial', sans-serif;
+            font-size: 11pt;
+            color: #000;
+            line-height: 1.25; /* Interlineado ligeramente ajustado para asegurar 1 sola página */
+            text-align: justify;
+        }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .bold { font-weight: bold; }
+        .uppercase { text-transform: uppercase; }
+        .mb-1 { margin-bottom: 8px; }
+        .mb-2 { margin-bottom: 12px; }
+        .mb-3 { margin-bottom: 18px; }
+
+        .separator-line {
+            border: 0;
+            border-bottom: 1px solid #000;
+            margin: 10px 0 15px 0;
+            width: 100%;
+        }
+
+        .list-custom {
+            list-style-type: circle;
+            margin-top: 5px;
+            margin-bottom: 15px;
+            padding-left: 20px;
+        }
+
+        .text-block {
+            margin-bottom: 12px;
+        }
+
+        .signatures {
+            width: 100%;
+            margin-top: 50px; /* Reducido para garantizar que no empuje a una segunda hoja */
+            border-collapse: collapse;
+        }
+        .signatures td {
+            width: 50%;
+            text-align: center;
+            vertical-align: bottom;
+            padding: 0 20px;
+        }
+        .signature-line {
+            border-top: 1px solid #000;
+            margin: 0 auto 5px auto;
+            width: 80%;
+        }
+        .signature-text { font-size: 10pt; }
+    </style>
+</head>
+<body>
+
+<div class="text-right mb-3">
+    <span class="bold">ASUNTO:</span> Solicitud de Traspaso de Lote
+</div>
+
+<div class="mb-3" th:text="${fechaEmision}">
+    Olmos, 21 de noviembre del 2025
+</div>
+
+<div>
+    Sr. José Raúl Bellodas Gutiérrez,<br/>
+    Gerente General de INMOBILIARIA TERRANORT S.A.C.<br/>
+    RUC 20613699890
+</div>
+
+<hr class="separator-line" />
+
+<div class="bold mb-2">
+    Atención:
+</div>
+
+<div class="text-block">
+    Yo, <span class="bold uppercase" th:text="${titularActual.nombres + ' ' + (titularActual.apellidos != null ? titularActual.apellidos : '')}">MIO CUEVA JAQUELINE DEL PILAR</span>
+    identificado(a) con <span class="bold" th:text="'DNI N° ' + ${titularActual.numeroDocumento}">DNI N° 41442388</span>
+    titular del lote ubicado en MZ. <span class="bold uppercase" th:text="'&quot;' + ${contrato.lote.manzana.nombre} + '&quot;'">"H"</span>
+    LOTE <span class="bold" th:text="'N° ' + ${contrato.lote.numero}">N° 6</span>
+    con un área de <span class="bold" th:text="${areaTotal} + ' M'">110.26 M</span><span class="bold"><sup>2</sup></span>,
+    ubicado dentro del predio Rural denominado: PARTE DEL LOTE 8, ZONA TERRITORIO DE LA COMUNIDAD DE OLMOS, SECTOR OLMOS, DISTRITO DE OLMOS, PROVINCIA Y DEPARTAMENTO DE LAMBAYEQUE, cuyo Proyecto se denomina <span class="bold">LOTIZACIÓN PRIMAVERA</span>.
+    Y, cuyo dominio, áreas, linderos y medidas perimétricas se encuentran debidamente inscritas en la Partida Electrónica <span class="bold">N° 11290424</span> del Registro de predios de la SUNARP – Chiclayo.
+</div>
+
+<div class="text-block">
+    Por medio del presente documento, <span class="bold">solicito el traspaso voluntario de mis derechos y obligaciones</span> sobre el mencionado lote a favor de la siguiente persona:
+</div>
+
+<div class="bold" style="text-decoration: underline;">Nuevo titular:</div>
+<ul class="list-custom">
+    <li><span class="bold">Apellidos y Nombres:</span> <span class="uppercase" th:text="${nuevoTitular.nombres + ' ' + (nuevoTitular.apellidos != null ? nuevoTitular.apellidos : '')}">MIO CUEVA ARISTERES HILDEBRANDO</span></li>
+    <li><span class="bold">DNI N°:</span> <span th:text="${nuevoTitular.numeroDocumento}">45305567</span></li>
+</ul>
+
+<div class="text-block">
+    Declaro que este traspaso se realiza <span class="bold">por decisión libre y voluntaria</span>, con pleno conocimiento de las implicancias legales y contractuales que conlleva.<br/>
+    Asimismo, manifiesto que el monto total del traspaso asciende a la suma de
+    <span class="bold uppercase" th:text="'S/ ' + ${#numbers.formatDecimal(montoAportado, 1, 'COMMA', 2, 'POINT')} + ' (' + ${montoAportadoLetras} + ' SOLES)'">S/ 600.00 (SEISCIENTOS Y 00/100 SOLES)</span>,
+    correspondiente al total de aportes efectuados hasta la fecha. La inmobiliaria reconocerá los aportes realizados por el titular anterior a favor del nuevo titular como parte de su aporte inicial, efectuando los ajustes administrativos y documentarios correspondientes para reflejar el cambio de titularidad.<br/>
+    El nuevo titular acepta y asume la titularidad del lote mencionado, así como los derechos derivados del mismo y el reconocimiento de los aportes trasladados. Su vínculo contractual se formalizará mediante un nuevo contrato suscrito con la inmobiliaria, sujeto a las condiciones y políticas vigentes del proyecto. La presente solicitud queda sujeta a revisión y aprobación por parte de la empresa, la cual procederá al registro formal del nuevo titular una vez verificada la documentación y el cumplimiento de las condiciones establecidas.
+</div>
+
+<div class="text-block mt-3">
+    Agradezco de antemano su consideración, esperando alcanzar lo solicitado.<br/>
+    Atentamente;
+</div>
+
+<table class="signatures">
+    <tr>
+        <td>
+            <div class="signature-line"></div>
+            <div class="signature-text bold">TITULAR ACTUAL</div>
+            <div class="signature-text uppercase" th:text="${titularActual.nombres + ' ' + (titularActual.apellidos != null ? titularActual.apellidos : '')}">NOMBRE</div>
+            <div class="signature-text" th:text="'DNI: ' + ${titularActual.numeroDocumento}">DNI</div>
+        </td>
+        <td>
+            <div class="signature-line"></div>
+            <div class="signature-text bold">NUEVO TITULAR</div>
+            <div class="signature-text uppercase" th:text="${nuevoTitular.nombres + ' ' + (nuevoTitular.apellidos != null ? nuevoTitular.apellidos : '')}">NOMBRE</div>
+            <div class="signature-text" th:text="'DNI: ' + ${nuevoTitular.numeroDocumento}">DNI</div>
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>

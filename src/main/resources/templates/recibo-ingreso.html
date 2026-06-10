@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8" />
+    <title>Recibo de Ingreso a Caja</title>
+    <style>
+        @page { size: A4; margin: 1.5cm; }
+        body { font-family: 'Arial', sans-serif; font-size: 9pt; color: #000; margin: 0; }
+        .text-center { text-align: center; } .text-right { text-align: right; } .bold { font-weight: bold; } .uppercase { text-transform: uppercase; }
+        .header-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        .box-ruc { border: 2px solid #555; text-align: center; padding: 15px 10px; width: 230px; }
+        .box-ruc .title-doc { font-size: 14pt; font-weight: bold; margin: 8px 0; color: #333; }
+        .client-table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-bottom: 10px; }
+        .client-table td { padding: 4px; } .client-table .label { font-weight: bold; width: 15%; }
+        .items-table { width: 100%; border-collapse: collapse; border: 1px solid #000; }
+        .items-table th { background-color: #4a4a4a; color: #fff; padding: 6px; }
+        .items-table td { border: 1px solid #000; padding: 6px; }
+        .totals-container { width: 100%; border-collapse: collapse; margin-top: 5px; }
+        .obs-box { border: 2px dashed #d9534f; background-color: #fdf7f7; padding: 10px; margin-top: 20px; font-size: 9pt; }
+        .obs-box strong { color: #d9534f; }
+    </style>
+</head>
+<body>
+
+<table class="header-table">
+    <tr>
+        <td style="width: 25%;"><img th:if="${imgLogo != null}" th:src="${imgLogo}" style="max-height: 80px;" alt="Logo" /></td>
+        <td style="width: 45%;" class="text-center">
+            <div style="font-size: 14pt; font-weight: bold;" th:text="${empresa != null ? empresa.razonSocial : 'INMOBILIARIA'}"></div>
+            <div>Control Interno de Caja</div>
+        </td>
+        <td style="width: 30%;" class="text-right">
+            <div class="box-ruc">
+                <div th:text="'RUC: ' + ${empresa != null ? empresa.ruc : '00000000000'}"></div>
+                <div class="title-doc">RECIBO DE INGRESO</div>
+                <div class="bold" style="color: #d9534f;" th:text="${pagoBase.numeroComprobante}">RI01-000000</div>
+            </div>
+        </td>
+    </tr>
+</table>
+
+<table class="client-table">
+    <tr>
+        <td class="label">RECIBÍ DE:</td>
+        <td class="uppercase" th:text="${cliente.nombres + ' ' + (cliente.apellidos != null ? cliente.apellidos : '')}"></td>
+        <td class="label">FECHA RECEPCIÓN:</td>
+        <td th:text="${#temporals.format(pagoBase.fechaPago, 'dd/MM/yyyy HH:mm')}"></td>
+    </tr>
+    <tr>
+        <td class="label">LA SUMA DE:</td>
+        <td class="uppercase bold" colspan="3" th:text="${montoEnLetras} + ' (S/ ' + ${#numbers.formatDecimal(totalAbonado, 1, 'COMMA', 2, 'POINT')} + ')' "></td>
+    </tr>
+</table>
+
+<p>Monto entregado en <b>EFECTIVO</b>, el cual será destinado a amortizar las siguientes cuotas:</p>
+
+<table class="items-table">
+    <thead>
+    <tr><th>CONTRATO / LOTE</th><th>DESCRIPCIÓN DE CUOTA A AMORTIZAR</th><th>IMPORTE (S/)</th></tr>
+    </thead>
+    <tbody>
+    <tr th:each="pago : ${pagos}">
+        <td class="text-center uppercase" th:text="'Mz. ' + ${contrato.lote.manzana.nombre} + ' Lt. ' + ${contrato.lote.numero}"></td>
+        <td class="uppercase" th:text="${pago.descripcion}"></td>
+        <td class="text-right" th:text="${#numbers.formatDecimal(pago.montoAbonado, 1, 'COMMA', 2, 'POINT')}"></td>
+    </tr>
+    </tbody>
+</table>
+
+<div class="obs-box">
+    <strong>⚠️ ADVERTENCIA DE CONTROL INTERNO:</strong><br/>
+    - Este es un documento de control interno provisional que acredita la recepción física del dinero en oficina.<br/>
+    - La cancelación oficial de las cuotas está sujeta a la validación y depósito íntegro en las cuentas bancarias de la empresa.<br/>
+    - Una vez conciliado el depósito, este recibo será canjeado por su respectivo Comprobante de Pago.
+</div>
+
+<br/><br/><br/>
+<table style="width: 100%; text-align: center; margin-top: 40px;">
+    <tr>
+        <td style="width: 50%;">
+            ___________________________________<br/>
+            <b>Firma del Cliente</b><br/>
+            DNI: <span th:text="${cliente.numeroDocumento}"></span>
+        </td>
+        <td style="width: 50%;">
+            ___________________________________<br/>
+            <b>Recibí Conforme (Caja)</b><br/>
+            <span th:text="${empresa != null ? empresa.razonSocial : 'Inmobiliaria Terranorte S.A.C.'}"></span>
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>

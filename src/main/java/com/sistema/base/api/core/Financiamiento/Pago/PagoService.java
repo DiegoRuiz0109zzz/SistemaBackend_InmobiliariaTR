@@ -1,26 +1,41 @@
 package com.sistema.base.api.core.Financiamiento.Pago;
 
+import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
+import com.sistema.base.api.core.Empresa.Empresa;
+import com.sistema.base.api.core.Empresa.EmpresaRepository;
 import com.sistema.base.api.core.Financiamiento.Comision.ComisionService;
 import com.sistema.base.api.core.Financiamiento.Contrato.Contrato;
 import com.sistema.base.api.core.Financiamiento.Contrato.ContratoRepository;
-import com.sistema.base.api.core.Financiamiento.Contrato.EstadoContrato;
 import com.sistema.base.api.core.Financiamiento.Contrato.ContratoHistorial.ContratoHistorialService;
 import com.sistema.base.api.core.Financiamiento.Cuota.Cuota;
 import com.sistema.base.api.core.Financiamiento.Cuota.CuotaRepository;
 import com.sistema.base.api.core.Financiamiento.Cuota.EstadoCuota;
-import com.sistema.base.api.core.Lotizacion.Lote.EstadoLote;
-import com.sistema.base.api.core.Lotizacion.Lote.Lote;
-import com.sistema.base.api.core.Lotizacion.Lote.LoteRepository;
+import com.sistema.base.api.core.Financiamiento.Pago.DepositoBancario.DepositoBancario;
+import com.sistema.base.api.core.Financiamiento.Pago.DepositoBancario.DepositoBancarioRepository;
+import com.sistema.base.api.core.Financiamiento.Pago.Serie.Serie;
+import com.sistema.base.api.core.Financiamiento.Pago.Serie.SerieRepository;
 import com.sistema.base.api.core.Usuario.Clientes.Cliente;
 import com.sistema.base.api.service.FileStorageService;
+import com.sistema.base.api.utils.NumeroALetrasConverter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import jakarta.persistence.criteria.Predicate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.thymeleaf.TemplateEngine;
+import org.thymeleaf.context.Context;
 
+import java.io.ByteArrayOutputStream;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -30,201 +45,334 @@ public class PagoService {
     private final CuotaRepository cuotaRepository;
     private final FileStorageService fileStorageService;
     private final ContratoRepository contratoRepository;
-    private final LoteRepository loteRepository;
     private final ContratoHistorialService contratoHistorialService;
-
-    // ✅ INYECTAMOS EL MOTOR DE COMISIONES
     private final ComisionService comisionService;
+    private final EmpresaRepository empresaRepository;
+    private final SerieRepository serieRepository;
+    private final TemplateEngine templateEngine;
+    private final DepositoBancarioRepository depositoBancarioRepository;
 
     @Transactional(readOnly = true)
     public List<Pago> listarPorCuota(Long cuotaId) {
         return pagoRepository.findByCuotaIdAndEnabledTrue(cuotaId);
     }
 
+    @Transactional(readOnly = true)
+    public Page<Pago> listarPagosPaginadosConFiltros(
+            int page, int size,
+            String metodoPago,
+            TipoComprobante tipoComprobante,
+            EstadoPago estado,
+            LocalDate fechaDesde,
+            LocalDate fechaHasta) {
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
+
+        Specification<Pago> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            // Filtro 1: Método de Pago (Ej: "EFECTIVO", "TRANSFERENCIA")
+            if (metodoPago != null && !metodoPago.trim().isEmpty()) {
+                predicates.add(cb.equal(root.get("metodoPago"), metodoPago));
+            }
+            if (tipoComprobante != null) {
+                predicates.add(cb.equal(root.get("tipoComprobante"), tipoComprobante));
+            }
+            if (estado != null) {
+                predicates.add(cb.equal(root.get("estado"), estado));
+            }
+            if (fechaDesde != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("fechaPago"), fechaDesde));
+            }
+
+            if (fechaHasta != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("fechaPago"), fechaHasta));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        return pagoRepository.findAll(spec, pageable);
+    }
+
     private String generarNombreVoucher(Cliente cliente, MultipartFile file) {
         String dni = cliente.getNumeroDocumento();
         String primerNombre = cliente.getNombres().trim().split("\\s+")[0].toUpperCase();
         String primerApellido = cliente.getApellidos().trim().split("\\s+")[0].toUpperCase();
-
         String originalFilename = org.springframework.util.StringUtils.cleanPath(file.getOriginalFilename());
-        originalFilename = originalFilename.replaceAll("[\\s+]", "_");
-
-        return dni + "_" + primerNombre + "_" + primerApellido + "_" + originalFilename;
+        return dni + "_" + primerNombre + "_" + primerApellido + "_" + originalFilename.replaceAll("[\\s+]", "_");
     }
 
-    @Transactional
-    public Pago registrarPago(Long cuotaId, Double montoAbonado, String metodoPago, String numeroOperacion, MultipartFile voucherFile) {
-        Cuota cuota = cuotaRepository.findById(cuotaId)
-                .orElseThrow(() -> new RuntimeException("La cuota no existe."));
+    private String generarNuevoNumeroComprobante(TipoComprobante tipoComprobante) {
+        Serie serieActiva = serieRepository.findActiveSerieForUpdate(tipoComprobante)
+                .orElseThrow(() -> new RuntimeException("No se encontró una serie activa para " + tipoComprobante.name()));
 
-        double saldoPendiente = cuota.getMontoTotal() - cuota.getMontoPagado();
-        if (montoAbonado > saldoPendiente) {
-            throw new RuntimeException("El monto a pagar supera el saldo pendiente.");
+        int nuevoCorrelativo = serieActiva.getUltimoCorrelativo() + 1;
+        serieActiva.setUltimoCorrelativo(nuevoCorrelativo);
+        serieRepository.save(serieActiva);
+
+        return String.format("%s-%06d", serieActiva.getSerie(), nuevoCorrelativo);
+    }
+
+    // =========================================================================================
+    // ✅ REGISTRAR PAGO DIRECTO
+    // =========================================================================================
+    @Transactional
+    public List<Pago> registrarPago(Long cuotaId, Double montoAbonado, String metodoPago, String numeroOperacion, String descripcion, MultipartFile voucherFile) {
+        Cuota cuotaInicialRequest = cuotaRepository.findById(cuotaId)
+                .orElseThrow(() -> new RuntimeException("La cuota no existe."));
+        Contrato contrato = cuotaInicialRequest.getContrato();
+
+        List<Cuota> cuotasPendientes = cuotaRepository.findByContratoIdAndEnabledTrueOrderByNumeroCuotaAsc(contrato.getId())
+                .stream().filter(c -> c.getMontoPagado() < c.getMontoTotal()).collect(Collectors.toList());
+
+        double deudaTotal = cuotasPendientes.stream().mapToDouble(c -> c.getMontoTotal() - c.getMontoPagado()).sum();
+        if (montoAbonado > deudaTotal) {
+            throw new RuntimeException("El monto a abonar (S/ " + montoAbonado + ") supera la deuda total pendiente (S/ " + deudaTotal + ").");
         }
 
         String fotoVoucherUrl = null;
         if (voucherFile != null && !voucherFile.isEmpty()) {
-            Cliente cliente = cuota.getContrato().getCliente();
-            String customFileName = generarNombreVoucher(cliente, voucherFile);
-            String savedPath = fileStorageService.storeFileWithCustomName(voucherFile, "vouchers", customFileName);
-            fotoVoucherUrl = "uploads/" + savedPath;
+            String customFileName = generarNombreVoucher(contrato.getCliente(), voucherFile);
+            fotoVoucherUrl = "uploads/" + fileStorageService.storeFileWithCustomName(voucherFile, "vouchers", customFileName);
         }
 
-        int diasRetraso = 0;
-        boolean pagoADestiempo = false;
+        boolean esIngresoCaja = "EFECTIVO".equalsIgnoreCase(metodoPago) && (numeroOperacion == null || numeroOperacion.trim().isEmpty());
+
+        TipoComprobante tipoDoc = esIngresoCaja ? TipoComprobante.RECIBO_INGRESO : TipoComprobante.NOTA_ABONO;
+        EstadoPago estadoDelPago = esIngresoCaja ? EstadoPago.POR_VALIDAR : EstadoPago.PROCESADO;
+
+        String numeroComprobanteAgrupado = generarNuevoNumeroComprobante(tipoDoc);
+
+        Double montoRestante = montoAbonado;
+        List<Pago> pagosGenerados = new ArrayList<>();
         LocalDate fechaPagoActual = LocalDate.now();
 
-        if (fechaPagoActual.isAfter(cuota.getFechaVencimiento())) {
-            pagoADestiempo = true;
-            diasRetraso = (int) ChronoUnit.DAYS.between(cuota.getFechaVencimiento(), fechaPagoActual);
-        }
+        List<String> nombresCuotasAfectadas = new ArrayList<>();
 
-        Pago pago = Pago.builder()
-                .cuota(cuota)
-                .montoAbonado(montoAbonado)
-                .metodoPago(metodoPago)
-                .numeroOperacion(numeroOperacion)
-                .fotoVoucherUrl(fotoVoucherUrl)
-                .estado(EstadoPago.PROCESADO)
-                .diasRetraso(diasRetraso)
-                .pagoADestiempo(pagoADestiempo)
-                .build();
+        for (Cuota c : cuotasPendientes) {
+            if (montoRestante <= 0) break;
 
-        double nuevoMontoPagado = cuota.getMontoPagado() + pago.getMontoAbonado();
-        cuota.setMontoPagado(nuevoMontoPagado);
+            Double saldoCuota = c.getMontoTotal() - c.getMontoPagado();
+            Double montoAAplicar = Math.min(montoRestante, saldoCuota);
 
-        if (nuevoMontoPagado >= cuota.getMontoTotal()) {
-            cuota.setEstado(pagoADestiempo ? EstadoCuota.PAGADO_DESTIEMPO : EstadoCuota.PAGADO_TOTAL);
+            boolean pagoADestiempo = fechaPagoActual.isAfter(c.getFechaVencimiento());
+            int diasRetraso = pagoADestiempo ? (int) ChronoUnit.DAYS.between(c.getFechaVencimiento(), fechaPagoActual) : 0;
 
-            if (cuota.getNumeroCuota() != null && cuota.getNumeroCuota() == 0) {
-                Contrato contrato = cuota.getContrato();
-                contrato.setEstadoContrato(EstadoContrato.ACTIVO);
+            String nombreCuota = (c.getNumeroCuota() != null && c.getNumeroCuota() == 0) ? "INICIAL" : "CUOTA " + c.getNumeroCuota();
 
-                // ✅ RESET DOCUMENTAL: Se limpia para exigir la subida del contrato definitivo
-                contrato.setUrlDocumentoFirmado(null);
-                contratoRepository.save(contrato);
-
-                Lote lote = contrato.getLote();
-                lote.setEstadoVenta(EstadoLote.VENDIDO);
-                loteRepository.save(lote);
-
-                contratoHistorialService.registrarHito(
-                        contrato,
-                        "CONTRATO_ACTIVO",
-                        "Inicial completada. Se requiere subir el Contrato de Compra-Venta definitivo firmado.",
-                        "Pago validado (" + metodoPago + ")"
-                );
+            if (!nombresCuotasAfectadas.contains(nombreCuota)) {
+                nombresCuotasAfectadas.add(nombreCuota);
             }
-        } else {
-            cuota.setEstado(EstadoCuota.PAGADO_PARCIAL);
+
+            String descDinamica;
+            if (Double.compare(montoAAplicar, saldoCuota) == 0) {
+                if (c.getMontoPagado() == 0.0) {
+                    descDinamica = "ABONO DE " + nombreCuota;
+                } else {
+                    descDinamica = "SALDO DE " + nombreCuota;
+                }
+            } else {
+                descDinamica = "A CUENTA " + nombreCuota;
+            }
+
+            if (descripcion != null && !descripcion.trim().isEmpty()) {
+                descDinamica += " - " + descripcion;
+            }
+
+            Pago pago = Pago.builder()
+                    .cuota(c)
+                    .montoAbonado(montoAAplicar)
+                    .metodoPago(metodoPago)
+                    .numeroOperacion(numeroOperacion)
+                    .descripcion(descDinamica)
+                    .fotoVoucherUrl(fotoVoucherUrl)
+                    .estado(estadoDelPago)
+                    .diasRetraso(diasRetraso)
+                    .pagoADestiempo(pagoADestiempo)
+                    .tipoComprobante(tipoDoc)
+                    .numeroComprobante(numeroComprobanteAgrupado)
+                    .build();
+
+            c.setMontoPagado(c.getMontoPagado() + montoAAplicar);
+
+            if (c.getMontoPagado() >= c.getMontoTotal()) {
+                c.setEstado(pagoADestiempo ? EstadoCuota.PAGADO_DESTIEMPO : EstadoCuota.PAGADO_TOTAL);
+                if (c.getNumeroCuota() != null && c.getNumeroCuota() == 0) {
+                    contratoHistorialService.registrarHito(contrato, "INICIAL_COMPLETADA",
+                            "Inicial cancelada al 100%. Pendiente de estructuración y activación.", "Pago validado", null);
+                }
+            } else {
+                c.setEstado(EstadoCuota.PAGADO_PARCIAL);
+            }
+
+            cuotaRepository.save(c);
+            pagosGenerados.add(pagoRepository.save(pago));
+            montoRestante -= montoAAplicar;
         }
 
-        cuotaRepository.save(cuota);
-        Pago pagoGuardado = pagoRepository.save(pago);
-
-        // ✅ GATILLO DE COMISIONES (Verificamos si ya pagó S/ 2500 en total en este contrato)
-        Contrato contrato = cuota.getContrato();
         double totalPagadoHastaHoy = cuotaRepository.findByContratoIdAndEnabledTrueOrderByNumeroCuotaAsc(contrato.getId())
-                .stream()
-                .mapToDouble(Cuota::getMontoPagado)
-                .sum();
+                .stream().mapToDouble(Cuota::getMontoPagado).sum();
+        if (totalPagadoHastaHoy >= 2500.0) comisionService.evaluarYGenerarComisiones(contrato);
 
-        if (totalPagadoHastaHoy >= 2500.0) {
-            comisionService.evaluarYGenerarComisiones(contrato);
+        String resumenCuotas = String.join(", ", nombresCuotasAfectadas);
+
+        if (esIngresoCaja) {
+            String urlVistaPrevia = "/api/pagos/recibo/" + numeroComprobanteAgrupado + "/pdf";
+            contratoHistorialService.registrarHito(contrato, "INGRESO_CAJA",
+                    "Se recibió S/ " + montoAbonado + " en EFECTIVO físico correspondiente a (" + resumenCuotas + "). Pendiente de depósito bancario bajo el recibo " + numeroComprobanteAgrupado, "Caja", urlVistaPrevia);
+        } else {
+            // ✅ SOLO SE REGISTRA EL HITO SI ES UNA NOTA DE ABONO QUE AFECTA A MÁS DE UNA CUOTA
+            if (nombresCuotasAfectadas.size() > 1) {
+                String urlVistaPrevia = "/api/pagos/comprobante/" + numeroComprobanteAgrupado + "/pdf";
+                contratoHistorialService.registrarHito(contrato, "NOTA_ABONO_CUOTAS",
+                        "Se registró un abono de S/ " + montoAbonado + " correspondiente a (" + resumenCuotas + ") bajo el comprobante " + numeroComprobanteAgrupado, "Banco", urlVistaPrevia);
+            }
         }
 
-        return pagoGuardado;
+        return pagosGenerados;
     }
 
+    // =========================================================================================
+    // ✅ PROCESAR PAGO PENDIENTE
+    // =========================================================================================
     @Transactional
-    public Pago procesarPagoPendiente(Long pagoId, String metodoPago, String numeroOperacion, MultipartFile voucherFile) {
-        Pago pago = pagoRepository.findById(pagoId)
-                .orElseThrow(() -> new RuntimeException("Pago no encontrado."));
+    public List<Pago> procesarPagoPendiente(Long pagoId, String metodoPago, String numeroOperacion, String descripcion, MultipartFile voucherFile) {
+        Pago pagoOriginal = pagoRepository.findById(pagoId).orElseThrow(() -> new RuntimeException("Pago no encontrado."));
+        if (pagoOriginal.getEstado() == EstadoPago.PROCESADO) throw new RuntimeException("Este pago ya fue procesado.");
 
-        if (pago.getEstado() == EstadoPago.PROCESADO) {
-            throw new RuntimeException("Este pago ya fue procesado.");
+        Contrato contrato = pagoOriginal.getCuota().getContrato();
+        Double montoTotalAbonado = pagoOriginal.getMontoAbonado();
+
+        List<Cuota> cuotasPendientes = cuotaRepository.findByContratoIdAndEnabledTrueOrderByNumeroCuotaAsc(contrato.getId())
+                .stream().filter(c -> c.getMontoPagado() < c.getMontoTotal()).collect(Collectors.toList());
+
+        double deudaTotal = cuotasPendientes.stream().mapToDouble(c -> c.getMontoTotal() - c.getMontoPagado()).sum();
+        if (montoTotalAbonado > deudaTotal) {
+            throw new RuntimeException("El abono pendiente (S/ " + montoTotalAbonado + ") supera la deuda total actual del contrato.");
         }
 
-        Cuota cuota = pago.getCuota();
-        String fotoVoucherUrl = null;
+        String fotoVoucherUrl = pagoOriginal.getFotoVoucherUrl();
         if (voucherFile != null && !voucherFile.isEmpty()) {
-            Cliente cliente = cuota.getContrato().getCliente();
-            String customFileName = generarNombreVoucher(cliente, voucherFile);
-            String savedPath = fileStorageService.storeFileWithCustomName(voucherFile, "vouchers", customFileName);
-            fotoVoucherUrl = "uploads/" + savedPath;
+            fotoVoucherUrl = "uploads/" + fileStorageService.storeFileWithCustomName(voucherFile, "vouchers", generarNombreVoucher(contrato.getCliente(), voucherFile));
         }
 
-        int diasRetraso = 0;
-        boolean pagoADestiempo = false;
-        LocalDate fechaDelPago = pago.getFechaPago();
+        boolean esIngresoCaja = "EFECTIVO".equalsIgnoreCase(metodoPago) && (numeroOperacion == null || numeroOperacion.trim().isEmpty());
 
-        if (fechaDelPago.isAfter(cuota.getFechaVencimiento())) {
-            pagoADestiempo = true;
-            diasRetraso = (int) ChronoUnit.DAYS.between(cuota.getFechaVencimiento(), fechaDelPago);
-        }
+        TipoComprobante tipoDoc = esIngresoCaja ? TipoComprobante.RECIBO_INGRESO : TipoComprobante.NOTA_ABONO;
+        EstadoPago estadoDelPago = esIngresoCaja ? EstadoPago.POR_VALIDAR : EstadoPago.PROCESADO;
 
-        pago.setMetodoPago(metodoPago);
-        pago.setNumeroOperacion(numeroOperacion);
-        if (fotoVoucherUrl != null) pago.setFotoVoucherUrl(fotoVoucherUrl);
-        pago.setEstado(EstadoPago.PROCESADO);
-        pago.setDiasRetraso(diasRetraso);
-        pago.setPagoADestiempo(pagoADestiempo);
+        String numeroComprobanteAgrupado = generarNuevoNumeroComprobante(tipoDoc);
+        List<Pago> pagosProcesados = new ArrayList<>();
+        LocalDate fechaDelPago = pagoOriginal.getFechaPago() != null ? pagoOriginal.getFechaPago() : LocalDate.now();
 
-        double nuevoMontoPagado = cuota.getMontoPagado() + pago.getMontoAbonado();
-        cuota.setMontoPagado(nuevoMontoPagado);
+        Double montoRestante = montoTotalAbonado;
+        boolean esPrimerPago = true;
 
-        if (nuevoMontoPagado >= cuota.getMontoTotal()) {
-            cuota.setEstado(pagoADestiempo ? EstadoCuota.PAGADO_DESTIEMPO : EstadoCuota.PAGADO_TOTAL);
+        List<String> nombresCuotasAfectadas = new ArrayList<>();
 
-            if (cuota.getNumeroCuota() != null && cuota.getNumeroCuota() == 0) {
-                Contrato contrato = cuota.getContrato();
-                contrato.setEstadoContrato(EstadoContrato.ACTIVO);
+        for (Cuota c : cuotasPendientes) {
+            if (montoRestante <= 0) break;
 
-                // ✅ RESET DOCUMENTAL: Se limpia para exigir la subida del contrato definitivo
-                contrato.setUrlDocumentoFirmado(null);
-                contratoRepository.save(contrato);
+            Double saldoCuota = c.getMontoTotal() - c.getMontoPagado();
+            Double montoAAplicar = Math.min(montoRestante, saldoCuota);
 
-                Lote lote = contrato.getLote();
-                lote.setEstadoVenta(EstadoLote.VENDIDO);
-                loteRepository.save(lote);
+            boolean pagoADestiempo = fechaDelPago.isAfter(c.getFechaVencimiento());
+            int diasRetraso = pagoADestiempo ? (int) ChronoUnit.DAYS.between(c.getFechaVencimiento(), fechaDelPago) : 0;
 
-                contratoHistorialService.registrarHito(
-                        contrato,
-                        "CONTRATO_ACTIVO",
-                        "Inicial completada mediante proceso pendiente. Se requiere subir el Contrato oficial firmado.",
-                        "Pago procesado en caja (" + metodoPago + ")"
-                );
+            String nombreCuota = (c.getNumeroCuota() != null && c.getNumeroCuota() == 0) ? "INICIAL" : "CUOTA " + c.getNumeroCuota();
+
+            if (!nombresCuotasAfectadas.contains(nombreCuota)) {
+                nombresCuotasAfectadas.add(nombreCuota);
             }
-        } else {
-            cuota.setEstado(EstadoCuota.PAGADO_PARCIAL);
+
+            Pago pagoActual;
+            if (esPrimerPago) {
+                pagoActual = pagoOriginal;
+                pagoActual.setCuota(c);
+                pagoActual.setMontoAbonado(montoAAplicar);
+                esPrimerPago = false;
+            } else {
+                pagoActual = Pago.builder()
+                        .cuota(c)
+                        .montoAbonado(montoAAplicar)
+                        .fechaPago(fechaDelPago)
+                        .fechaRegistro(pagoOriginal.getFechaRegistro())
+                        .build();
+            }
+
+            String descDinamica;
+            if (Double.compare(montoAAplicar, saldoCuota) == 0) {
+                if (c.getMontoPagado() == 0.0) {
+                    descDinamica = "ABONO DE " + nombreCuota;
+                } else {
+                    descDinamica = "SALDO DE " + nombreCuota;
+                }
+            } else {
+                descDinamica = "A CUENTA " + nombreCuota;
+            }
+
+            if (descripcion != null && !descripcion.trim().isEmpty()) {
+                descDinamica += " - " + descripcion;
+            }
+
+            pagoActual.setMetodoPago(metodoPago);
+            pagoActual.setNumeroOperacion(numeroOperacion);
+            pagoActual.setDescripcion(descDinamica);
+            pagoActual.setFotoVoucherUrl(fotoVoucherUrl);
+            pagoActual.setEstado(estadoDelPago);
+            pagoActual.setDiasRetraso(diasRetraso);
+            pagoActual.setPagoADestiempo(pagoADestiempo);
+            pagoActual.setTipoComprobante(tipoDoc);
+            pagoActual.setNumeroComprobante(numeroComprobanteAgrupado);
+
+            c.setMontoPagado(c.getMontoPagado() + montoAAplicar);
+
+            if (c.getMontoPagado() >= c.getMontoTotal()) {
+                c.setEstado(pagoADestiempo ? EstadoCuota.PAGADO_DESTIEMPO : EstadoCuota.PAGADO_TOTAL);
+                if (c.getNumeroCuota() != null && c.getNumeroCuota() == 0) {
+                    contratoHistorialService.registrarHito(contrato, "INICIAL_COMPLETADA",
+                            "Inicial cancelada al 100%. Pendiente de estructuración y activación.", "Pago validado", null);
+                }
+            } else {
+                c.setEstado(EstadoCuota.PAGADO_PARCIAL);
+            }
+
+            cuotaRepository.save(c);
+            pagosProcesados.add(pagoRepository.save(pagoActual));
+
+            montoRestante -= montoAAplicar;
         }
 
-        cuotaRepository.save(cuota);
-        Pago pagoGuardado = pagoRepository.save(pago);
-
-        // ✅ GATILLO DE COMISIONES (Verificamos si ya pagó S/ 2500 en total en este contrato)
-        Contrato contrato = cuota.getContrato();
         double totalPagadoHastaHoy = cuotaRepository.findByContratoIdAndEnabledTrueOrderByNumeroCuotaAsc(contrato.getId())
-                .stream()
-                .mapToDouble(Cuota::getMontoPagado)
-                .sum();
-
+                .stream().mapToDouble(Cuota::getMontoPagado).sum();
         if (totalPagadoHastaHoy >= 2500.0) {
             comisionService.evaluarYGenerarComisiones(contrato);
         }
 
-        return pagoGuardado;
+        String resumenCuotas = String.join(", ", nombresCuotasAfectadas);
+
+        if (esIngresoCaja) {
+            String urlVistaPrevia = "/api/pagos/recibo/" + numeroComprobanteAgrupado + "/pdf";
+            contratoHistorialService.registrarHito(contrato, "INGRESO_CAJA",
+                    "Se procesó un ingreso de S/ " + montoTotalAbonado + " en EFECTIVO físico correspondiente a (" + resumenCuotas + "). Pendiente de depósito en caja. Recibo: " + numeroComprobanteAgrupado, "Caja", urlVistaPrevia);
+        } else {
+            // ✅ SOLO SE REGISTRA EL HITO SI ES UNA NOTA DE ABONO QUE AFECTA A MÁS DE UNA CUOTA
+            if (nombresCuotasAfectadas.size() > 1) {
+                String urlVistaPrevia = "/api/pagos/comprobante/" + numeroComprobanteAgrupado + "/pdf";
+                contratoHistorialService.registrarHito(contrato, "NOTA_ABONO_CUOTAS",
+                        "Se procesó abono de S/ " + montoTotalAbonado + " tras validar transferencia bancaria por (" + resumenCuotas + "). Comprobante: " + numeroComprobanteAgrupado, "Banco", urlVistaPrevia);
+            }
+        }
+
+        return pagosProcesados;
     }
 
     @Transactional
     public void anularPago(Long pagoId) {
-        Pago pago = pagoRepository.findById(pagoId)
-                .orElseThrow(() -> new RuntimeException("Pago no encontrado"));
-
+        Pago pago = pagoRepository.findById(pagoId).orElseThrow(() -> new RuntimeException("Pago no encontrado"));
         Cuota cuota = pago.getCuota();
         cuota.setMontoPagado(cuota.getMontoPagado() - pago.getMontoAbonado());
         cuota.setEstado(cuota.getMontoPagado() <= 0 ? EstadoCuota.PENDIENTE : EstadoCuota.PAGADO_PARCIAL);
-
         cuotaRepository.save(cuota);
         pago.setEnabled(false);
         pagoRepository.save(pago);
@@ -232,30 +380,197 @@ public class PagoService {
 
     @Transactional
     public void recalcularAtrasosPorContrato(Long contratoId) {
-        // Obtenemos todas las cuotas del contrato
         List<Cuota> cuotas = cuotaRepository.findByContratoIdOrderByNumeroCuotaAsc(contratoId);
-
         for (Cuota cuota : cuotas) {
-            // Obtenemos los pagos de esa cuota
             List<Pago> pagos = pagoRepository.findByCuotaId(cuota.getId());
-
             for (Pago pago : pagos) {
-                // Si hay fecha de pago y fecha de vencimiento, recalculamos
                 if (pago.getFechaPago() != null && cuota.getFechaVencimiento() != null) {
-
-                    // Calculamos la diferencia en días reales según la base de datos
                     long diasDiferencia = ChronoUnit.DAYS.between(cuota.getFechaVencimiento(), pago.getFechaPago());
-
-                    if (diasDiferencia > 0) {
-                        pago.setDiasRetraso((int) diasDiferencia);
-                        pago.setPagoADestiempo(true);
-                    } else {
-                        pago.setDiasRetraso(0);
-                        pago.setPagoADestiempo(false);
-                    }
+                    pago.setDiasRetraso(diasDiferencia > 0 ? (int) diasDiferencia : 0);
+                    pago.setPagoADestiempo(diasDiferencia > 0);
                     pagoRepository.save(pago);
                 }
             }
         }
+    }
+
+    private String getImagenBase64(String nombreArchivo) {
+        try {
+            java.nio.file.Path path = java.nio.file.Paths.get("uploads/imagens/" + nombreArchivo);
+            if (java.nio.file.Files.exists(path)) {
+                return "data:image/png;base64," + java.util.Base64.getEncoder().encodeToString(java.nio.file.Files.readAllBytes(path));
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] generarNotaVentaPdf(Long pagoId) {
+        Pago pago = pagoRepository.findById(pagoId).orElseThrow(() -> new RuntimeException("Pago no encontrado"));
+
+        if (pago.getNumeroComprobante() == null || pago.getNumeroComprobante().isEmpty()) {
+            throw new RuntimeException("El pago no tiene un comprobante asignado.");
+        }
+
+        return generarNotaAbonoMultiPdf(pago.getNumeroComprobante());
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] generarNotaAbonoMultiPdf(String numeroComprobante) {
+        List<Pago> pagos = pagoRepository.findByNumeroComprobante(numeroComprobante);
+        if (pagos.isEmpty()) throw new RuntimeException("Comprobante no encontrado.");
+
+        Contrato contrato = pagos.get(0).getCuota().getContrato();
+        Empresa empresa = empresaRepository.findById(1L).orElse(null);
+        double totalAbonado = pagos.stream().mapToDouble(Pago::getMontoAbonado).sum();
+
+        Context context = new Context();
+        context.setVariable("pagos", pagos);
+        context.setVariable("pagoBase", pagos.get(0));
+        context.setVariable("totalAbonado", totalAbonado);
+        context.setVariable("cliente", contrato.getCliente());
+        context.setVariable("contrato", contrato);
+        context.setVariable("montoEnLetras", NumeroALetrasConverter.convertir(totalAbonado, "SOLES"));
+        context.setVariable("empresa", empresa);
+        context.setVariable("imgLogo", getImagenBase64("logo_terranort.png"));
+
+        return compilarPdf("nota-abono", context);
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] generarReciboIngresoPdf(String numeroComprobante) {
+        List<Pago> pagos = pagoRepository.findByNumeroComprobante(numeroComprobante);
+        if (pagos.isEmpty()) throw new RuntimeException("Recibo no encontrado.");
+
+        Contrato contrato = pagos.get(0).getCuota().getContrato();
+        Empresa empresa = empresaRepository.findById(1L).orElse(null);
+        double totalAbonado = pagos.stream().mapToDouble(Pago::getMontoAbonado).sum();
+
+        Context context = new Context();
+        context.setVariable("pagos", pagos);
+        context.setVariable("pagoBase", pagos.get(0));
+        context.setVariable("totalAbonado", totalAbonado);
+        context.setVariable("cliente", contrato.getCliente());
+        context.setVariable("contrato", contrato);
+        context.setVariable("montoEnLetras", NumeroALetrasConverter.convertir(totalAbonado, "SOLES"));
+        context.setVariable("empresa", empresa);
+        context.setVariable("imgLogo", getImagenBase64("logo_terranort.png"));
+
+        return compilarPdf("recibo-ingreso", context);
+    }
+
+    private byte[] compilarPdf(String templateName, Context context) {
+        String html = templateEngine.process(templateName, context);
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            PdfRendererBuilder builder = new PdfRendererBuilder();
+            builder.useFastMode();
+            builder.withHtmlContent(html, "");
+            builder.toStream(outputStream);
+            builder.run();
+            return outputStream.toByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException("Error crítico al compilar PDF (" + templateName + "): " + e.getMessage());
+        }
+    }
+
+    @Transactional
+    public List<Pago> conciliarReciboCaja(String numeroRecibo, List<String> bancos, List<String> operaciones, List<Double> montos, List<MultipartFile> vouchers) {
+
+        List<Pago> pagosEnCaja = pagoRepository.findByNumeroComprobante(numeroRecibo);
+        if (pagosEnCaja.isEmpty()) {
+            throw new RuntimeException("No se encontró ningún registro de caja con el recibo: " + numeroRecibo);
+        }
+
+        double totalEsperado = pagosEnCaja.stream().mapToDouble(Pago::getMontoAbonado).sum();
+        double totalDepositado = montos.stream().mapToDouble(Double::doubleValue).sum();
+
+        if (totalDepositado < totalEsperado) {
+            throw new RuntimeException("Descuadre de caja: Se esperaban S/ " + totalEsperado + " pero los depósitos suman S/ " + totalDepositado);
+        }
+
+        Contrato contrato = pagosEnCaja.get(0).getCuota().getContrato();
+        LocalDate hoy = LocalDate.now();
+        List<String> operacionesConcatenadas = new ArrayList<>();
+
+        for (int i = 0; i < montos.size(); i++) {
+            String fotoVoucherUrl = null;
+            if (vouchers != null && vouchers.size() > i && vouchers.get(i) != null && !vouchers.get(i).isEmpty()) {
+                MultipartFile file = vouchers.get(i);
+                String cleanName = org.springframework.util.StringUtils.cleanPath(file.getOriginalFilename()).replaceAll("[\\s+]", "_");
+                String customName = "DEP_" + operaciones.get(i) + "_" + cleanName;
+                fotoVoucherUrl = "uploads/" + fileStorageService.storeFileWithCustomName(file, "vouchers", customName);
+            }
+
+            DepositoBancario deposito = DepositoBancario.builder()
+                    .numeroReciboCaja(numeroRecibo)
+                    .banco(bancos.get(i))
+                    .numeroOperacion(operaciones.get(i))
+                    .monto(montos.get(i))
+                    .fotoVoucherUrl(fotoVoucherUrl)
+                    .fechaDeposito(hoy)
+                    .build();
+
+            depositoBancarioRepository.save(deposito);
+            operacionesConcatenadas.add(bancos.get(i) + " Op:" + operaciones.get(i));
+        }
+
+        String opsUnidas = String.join(" | ", operacionesConcatenadas);
+
+        for (Pago pago : pagosEnCaja) {
+            pago.setEstado(EstadoPago.PROCESADO);
+            pago.setNumeroOperacion(opsUnidas);
+            pagoRepository.save(pago);
+        }
+
+        contratoHistorialService.registrarHito(contrato, "CONCILIACION_CAJA",
+                "El dinero físico del recibo " + numeroRecibo + " fue depositado exitosamente en las cuentas bancarias. (" + opsUnidas + ")", "Tesorería", null);
+
+        return pagosEnCaja;
+    }
+
+    @Transactional
+    public void subirReciboFirmado(String numeroRecibo, MultipartFile archivoFirmado) {
+        List<Pago> pagos = pagoRepository.findByNumeroComprobante(numeroRecibo);
+        if (pagos.isEmpty()) {
+            throw new RuntimeException("No se encontró ningún registro con el recibo: " + numeroRecibo);
+        }
+
+        Contrato contrato = pagos.get(0).getCuota().getContrato();
+
+        if (archivoFirmado != null && !archivoFirmado.isEmpty()) {
+            String cleanName = org.springframework.util.StringUtils.cleanPath(archivoFirmado.getOriginalFilename()).replaceAll("[\\s+]", "_");
+            String customName = "FIRMADO_" + numeroRecibo + "_" + cleanName;
+
+            // Esta es la ruta física real donde se guardó el PDF escaneado/foto
+            String savedPath = "uploads/" + fileStorageService.storeFileWithCustomName(archivoFirmado, "recibos_firmados", customName);
+
+            // ✅ CORRECCIÓN: Pasamos 'savedPath' en lugar de 'null' para que el frontend pueda visualizarlo
+            contratoHistorialService.registrarHito(
+                    contrato,
+                    "RECIBO_FIRMADO",
+                    "Se adjuntó el recibo físico firmado por el cliente correspondiente al ingreso " + numeroRecibo + ".",
+                    "Caja",
+                    savedPath
+            );
+        } else {
+            throw new RuntimeException("Debe adjuntar un documento válido.");
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Object> obtenerReporteCajaFisica() {
+        List<Pago> pagosEnCaja = pagoRepository.findByEstado(EstadoPago.POR_VALIDAR);
+
+        double totalEfectivoEnOficina = pagosEnCaja.stream().mapToDouble(Pago::getMontoAbonado).sum();
+
+        java.util.Map<String, List<Pago>> pagosAgrupadosPorRecibo = pagosEnCaja.stream()
+                .collect(Collectors.groupingBy(p -> p.getNumeroComprobante() != null ? p.getNumeroComprobante() : "SIN_RECIBO_ANTIGUO"));
+
+        java.util.Map<String, Object> reporte = new java.util.HashMap<>();
+        reporte.put("totalEfectivoSoles", totalEfectivoEnOficina);
+        reporte.put("cantidadRecibosPendientes", pagosAgrupadosPorRecibo.size());
+        reporte.put("detalleRecibos", pagosAgrupadosPorRecibo);
+
+        return reporte;
     }
 }
