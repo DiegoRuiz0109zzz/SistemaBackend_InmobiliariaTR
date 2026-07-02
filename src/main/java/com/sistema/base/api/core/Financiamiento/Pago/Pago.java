@@ -70,6 +70,18 @@ public class Pago {
     @Column(name = "fecha_registro", updatable = false)
     private LocalDate fechaRegistro;
 
+    @Column(name = "enlace_pdf_sunat", length = 500)
+    private String enlacePdfSunat;
+
+    @Column(name = "enlace_xml_sunat", length = 500)
+    private String enlaceXmlSunat;
+
+    @Column(name = "external_id_sunat", length = 150)
+    private String externalIdSunat;
+
+    @Column(name = "estado_sunat", length = 50)
+    private String estadoSunat;
+
     @Builder.Default
     @Column(nullable = false)
     private boolean enabled = true;

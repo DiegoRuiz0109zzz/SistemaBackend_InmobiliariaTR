@@ -3,6 +3,7 @@ package com.sistema.base.api.core.Financiamiento.Contrato;
 import com.sistema.base.api.core.Financiamiento.Contrato.dtos.ContratoRequest;
 import com.sistema.base.api.core.Financiamiento.Contrato.dtos.CuotaPreview;
 import com.sistema.base.api.core.Financiamiento.Contrato.dtos.SimulacionRequest;
+import com.sistema.base.api.core.Financiamiento.Contrato.dtos.SimulacionResponseDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -36,7 +37,7 @@ public class ContratoController {
 
     @PostMapping("/simular")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<List<CuotaPreview>> simular(@RequestBody SimulacionRequest request) {
+    public ResponseEntity<SimulacionResponseDTO> simularCronograma(@RequestBody SimulacionRequest request) {
         return ResponseEntity.ok(contratoService.simularCronograma(request));
     }
 

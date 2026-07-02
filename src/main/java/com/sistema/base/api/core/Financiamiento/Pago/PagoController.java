@@ -1,5 +1,6 @@
 package com.sistema.base.api.core.Financiamiento.Pago;
 
+import com.sistema.base.api.core.Financiamiento.Pago.Sunat.PagoSunatRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -85,11 +86,6 @@ public class PagoController {
         return ResponseEntity.ok("Sincronización y recálculo de días de retraso completado para el contrato N°: " + contratoId);
     }
 
-    // =========================================================================
-    // ✅ ENDPOINTS PARA DESCARGAR DOCUMENTOS PDF
-    // =========================================================================
-
-    // 1. ENDPOINT DE COMPATIBILIDAD (Por ID - Deriva a Nota de Abono)
     @GetMapping("/{id}/nota-venta")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<byte[]> descargarNotaVenta(@PathVariable Long id) {
@@ -103,7 +99,6 @@ public class PagoController {
         return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
     }
 
-    // 2. NUEVO ENDPOINT: Nota de Abono Oficial (Por Comprobante agrupado)
     @GetMapping("/comprobante/{numeroComprobante}/pdf")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<byte[]> descargarNotaAbonoPdf(@PathVariable String numeroComprobante) {
@@ -117,7 +112,6 @@ public class PagoController {
         return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
     }
 
-    // 3. NUEVO ENDPOINT: Recibo de Ingreso Provisional de Caja
     @GetMapping("/recibo/{numeroComprobante}/pdf")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<byte[]> descargarReciboIngresoPdf(@PathVariable String numeroComprobante) {
@@ -131,9 +125,6 @@ public class PagoController {
         return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
     }
 
-    // =========================================================================
-    // ✅ NUEVO ENDPOINT: Conciliación de Caja Múltiple (Fase 2)
-    // =========================================================================
     @PostMapping(value = "/conciliar/{numeroRecibo}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAuthority('PROCESAR_PAGO')")
     public ResponseEntity<List<Pago>> conciliarCaja(
@@ -162,4 +153,38 @@ public class PagoController {
     public ResponseEntity<java.util.Map<String, Object>> obtenerReporteCaja() {
         return ResponseEntity.ok(pagoService.obtenerReporteCajaFisica());
     }
+
+//    @PostMapping("/{pagoId}/emitir-sunat")
+//    @PreAuthorize("hasAuthority('PROCESAR_PAGO')")
+//    public ResponseEntity<Pago> emitirSunat(
+//            @PathVariable Long pagoId,
+//            @RequestParam TipoComprobante tipoComprobante, // Ej: BOLETA o FACTURA
+//            @RequestParam String serie) {                  // Ej: B001 o F001
+//
+//        Pago pagoActualizado = pagoService.emitirComprobanteSunat(pagoId, tipoComprobante, serie);
+//        return ResponseEntity.ok(pagoActualizado);
+//    }
+
+    @PostMapping("/facturacion/registrar-pago")
+    @PreAuthorize("hasAuthority('CREAR_PAGO')")
+    public ResponseEntity<Pago> registrarPagoYEmitirSunatJson(@RequestBody PagoSunatRequest request) {
+
+        Pago pagoRealizado = pagoService.registrarPagoYEmitirSunat(
+                request.getCuotaId(),
+                request.getMontoAbonado(),
+                request.getMetodoPago(),
+                request.getDescripcion(),
+                request.getTipoComprobante(),
+                request.getSerie(),
+                request.getTipoIgv(),
+                request.getTipoDoc(),
+                // ✅ AQUÍ ESTÁN LOS 3 ARGUMENTOS FALTANTES
+                request.getRuc(),
+                request.getRazonSocial(),
+                request.getDireccionFactura()
+        );
+
+        return ResponseEntity.ok(pagoRealizado);
+    }
+
 }

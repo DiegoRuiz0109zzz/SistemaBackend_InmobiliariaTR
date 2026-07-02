@@ -3,6 +3,7 @@ package com.sistema.base.api.core.Financiamiento.Contrato.dtos;
 import com.sistema.base.api.core.Financiamiento.Contrato.TipoInicial;
 import lombok.Data;
 import java.time.LocalDate;
+import java.util.List;
 
 @Data
 public class ContratoRequest {
@@ -15,6 +16,8 @@ public class ContratoRequest {
     private Double montoInicialAcordado;
     private Double abonoInicialReal;
     private LocalDate fechaLimiteInicial;
+
+    private List<BloqueCuotaDTO> bloquesFlexibles;
 
     private Integer cantidadCuotas;
     private LocalDate fechaInicioPago;

@@ -14,6 +14,7 @@ import com.sistema.base.api.core.Financiamiento.Pago.DepositoBancario.DepositoBa
 import com.sistema.base.api.core.Financiamiento.Pago.DepositoBancario.DepositoBancarioRepository;
 import com.sistema.base.api.core.Financiamiento.Pago.Serie.Serie;
 import com.sistema.base.api.core.Financiamiento.Pago.Serie.SerieRepository;
+import com.sistema.base.api.core.Financiamiento.Pago.Sunat.SunatService;
 import com.sistema.base.api.core.Usuario.Clientes.Cliente;
 import com.sistema.base.api.service.FileStorageService;
 import com.sistema.base.api.utils.NumeroALetrasConverter;
@@ -35,6 +36,7 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -51,6 +53,7 @@ public class PagoService {
     private final SerieRepository serieRepository;
     private final TemplateEngine templateEngine;
     private final DepositoBancarioRepository depositoBancarioRepository;
+    private final SunatService sunatService;
 
     @Transactional(readOnly = true)
     public List<Pago> listarPorCuota(Long cuotaId) {
@@ -572,5 +575,75 @@ public class PagoService {
         reporte.put("detalleRecibos", pagosAgrupadosPorRecibo);
 
         return reporte;
+    }
+
+    // =========================================================================================
+// ✅ EMISIÓN DE COMPROBANTE ELECTRÓNICO (FACTURA / BOLETA)
+// =========================================================================================
+    @Transactional
+    public Pago registrarPagoYEmitirSunat(Long cuotaId, Double montoAbonado, String metodoPago, String descripcion,
+                                          TipoComprobante tipoComprobante, String prefijoSerie, String tipoIgv, String tipoDoc,
+                                          String ruc, String razonSocial, String direccionFactura) {
+
+        Cuota cuota = cuotaRepository.findById(cuotaId).orElseThrow(() -> new RuntimeException("Cuota no encontrada"));
+
+        // ✅ LÓGICA DE VALORES POR DEFECTO
+        // Si no envías tipoIgv en Postman, asume "20" (Exonerado).
+        String igvDefinitivo = (tipoIgv != null && !tipoIgv.trim().isEmpty()) ? tipoIgv : "20";
+
+        // 1. Guardamos el Pago Físico en BD
+        Pago nuevoPago = Pago.builder()
+                .cuota(cuota)
+                .montoAbonado(montoAbonado)
+                .metodoPago(metodoPago)
+                .descripcion(descripcion)
+                .estado(EstadoPago.PROCESADO)
+                .fechaRegistro(LocalDate.now())
+                .fechaPago(LocalDate.now())
+                .build();
+
+        Pago pagoGuardado = pagoRepository.save(nuevoPago);
+
+        // 2. Buscamos el correlativo de la serie activa
+        Serie serieActiva = serieRepository.findActiveSerieForUpdate(tipoComprobante)
+                .orElseThrow(() -> new RuntimeException("No hay serie activa para " + tipoComprobante.name()));
+
+        int nuevoCorrelativo = serieActiva.getUltimoCorrelativo() + 1;
+        serieActiva.setUltimoCorrelativo(nuevoCorrelativo);
+        serieRepository.save(serieActiva);
+
+        // 3. Emitimos a SUNAT pasando el igvDefinitivo y los nuevos datos
+        Map<String, Object> res = sunatService.emitirComprobante(
+                pagoGuardado,
+                tipoComprobante.name(),
+                prefijoSerie,
+                String.valueOf(nuevoCorrelativo),
+                igvDefinitivo,        // <-- SE PASA LA VARIABLE CON EL VALOR POR DEFECTO
+                tipoDoc,              // <-- Si es nulo, SunatService lo asume
+                ruc,                  // <-- Se pasa al servicio
+                razonSocial,          // <-- Se pasa al servicio
+                direccionFactura      // <-- Se pasa al servicio
+        );
+
+        // 4. Validamos la respuesta y guardamos los enlaces generados
+        if (res != null && res.containsKey("success") && (Boolean) res.get("success")) {
+            Map<String, Object> data = (Map<String, Object>) res.get("data");
+            Map<String, Object> links = (Map<String, Object>) res.get("links");
+
+            pagoGuardado.setTipoComprobante(tipoComprobante);
+            pagoGuardado.setNumeroComprobante(prefijoSerie + "-" + String.format("%06d", nuevoCorrelativo));
+            pagoGuardado.setEnlacePdfSunat((String) links.get("pdf"));
+            pagoGuardado.setEnlaceXmlSunat((String) links.get("xml"));
+
+            if (data != null && data.containsKey("external_id")) {
+                pagoGuardado.setExternalIdSunat((String) data.get("external_id"));
+            }
+
+            pagoGuardado.setEstadoSunat("ACEPTADO");
+            return pagoRepository.save(pagoGuardado);
+        } else {
+            String msjError = res != null && res.containsKey("message") ? (String) res.get("message") : "Respuesta desconocida";
+            throw new RuntimeException("SUNAT rechazó el comprobante: " + msjError);
+        }
     }
 }

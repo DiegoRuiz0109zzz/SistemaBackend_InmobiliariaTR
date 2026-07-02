@@ -2,6 +2,7 @@ package com.sistema.base.api.core.Financiamiento.Contrato.dtos;
 
 import lombok.Data;
 import java.time.LocalDate;
+import java.util.List;
 
 @Data
 public class SimulacionRequest {
@@ -11,6 +12,8 @@ public class SimulacionRequest {
 
     // El cliente elige la fecha, el día de esta fecha fijará los pagos mensuales
     private LocalDate fechaInicioPago;
+
+    private List<BloqueCuotaDTO> bloquesFlexibles;
 
     // --- NUEVO: Simulación Flexible ---
     private Integer cuotasEspeciales;  // Ej: 3
