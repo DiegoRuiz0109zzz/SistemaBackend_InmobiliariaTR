@@ -1,5 +1,7 @@
 package com.sistema.base.api.core.Financiamiento.Pago.Sunat;
 
+import com.sistema.base.api.core.Empresa.Empresa;
+import com.sistema.base.api.core.Financiamiento.Contrato.Contrato;
 import com.sistema.base.api.core.Financiamiento.Cuota.Cuota;
 import com.sistema.base.api.core.Financiamiento.Pago.Pago;
 import com.sistema.base.api.core.Usuario.Clientes.Cliente;
@@ -40,30 +42,14 @@ public class SunatService {
     @Value("${sunat.api.token}")
     private String apiToken;
 
-    public Map<String, Object> emitirComprobante(Pago pago, String tipoComprobanteId, String serie, String numeroCorrelativo, String tipoIgv, String tipoDoc, String ruc, String razonSocial, String direccionFactura) {
-        Cuota cuota = pago.getCuota();
-        Cliente cliente = cuota.getContrato().getCliente();
+    public Map<String, Object> emitirComprobanteMultiple(List<Pago> pagos, String tipoComprobanteId, String serie, String numeroCorrelativo, String tipoIgv, String tipoDoc, String ruc, String razonSocial, String direccionFactura, Empresa empresa) {
 
-        String nombreManzana = (cuota.getContrato().getLote().getManzana() != null)
-                ? cuota.getContrato().getLote().getManzana().getNombre()
-                : "";
-
-        String numeroLote = (cuota.getContrato().getLote().getNumero() != null)
-                ? String.valueOf(cuota.getContrato().getLote().getNumero())
-                : "";
-
-        String codigoLote = "MZ " + nombreManzana + "-" + numeroLote;
-
-        String numeroCuotaStr = (cuota.getNumeroCuota() != null && cuota.getNumeroCuota() > 0) ? String.valueOf(cuota.getNumeroCuota()) : "INICIAL";
-
-        String descripcionDinamica = "ANTICIPO RECIBIDO:SALDO A CUOTA " + numeroCuotaStr + " " + codigoLote +
-                ". PROYECTO DE NOMINADO LOTIZACION OLMOS,SECTOR OLMOS,DISTRITO OLMOS ,LAMBAYEQUE.";
+        // Tomamos el contrato del primer pago (todos pertenecen al mismo contrato)
+        Contrato contratoBase = pagos.get(0).getCuota().getContrato();
+        Cliente cliente = contratoBase.getCliente();
 
         String codigoTipoDocumento = "FACTURA".equalsIgnoreCase(tipoComprobanteId) ? "01" : "03";
-
-        String codigoTipoDocIdentidad = (tipoDoc != null && !tipoDoc.isEmpty())
-                ? tipoDoc
-                : ("01".equals(codigoTipoDocumento) ? "6" : "1");
+        String codigoTipoDocIdentidad = (tipoDoc != null && !tipoDoc.isEmpty()) ? tipoDoc : ("01".equals(codigoTipoDocumento) ? "6" : "1");
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -78,11 +64,33 @@ public class SunatService {
         payload.put("fecha_de_emision", java.time.LocalDate.now().toString());
         payload.put("hora_de_emision", java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")));
         payload.put("codigo_tipo_moneda", "PEN");
-        payload.put("codigo_tipo_operacion", "0101");
-        payload.put("fecha_de_vencimiento", java.time.LocalDate.now().toString());
 
-        // --- Forma de pago ---
+        // ✅ CAMBIO: 0104 es el Código Oficial SUNAT para "Venta Interna - Anticipos"
+        payload.put("codigo_tipo_operacion", "0104");
+
+        payload.put("fecha_de_vencimiento", java.time.LocalDate.now().toString());
         payload.put("forma_de_pago", "Contado");
+
+        // ✅ NUEVO: --- OBSERVACIONES (Método de Pago + Nro Operación) ---
+        String obsMetodo = pagos.get(0).getMetodoPago() != null ? pagos.get(0).getMetodoPago() : "";
+        String obsOperacion = pagos.get(0).getNumeroOperacion() != null ? pagos.get(0).getNumeroOperacion() : "";
+        String observacionSunat = (obsMetodo + " " + obsOperacion).trim();
+
+        if (!observacionSunat.isEmpty()) {
+            payload.put("observaciones", observacionSunat);
+        }
+
+        // --- Datos del Emisor (Tu Empresa) ---
+        if (empresa != null) {
+            Map<String, Object> emisor = new HashMap<>();
+            emisor.put("codigo_tipo_documento_identidad", "6");
+            emisor.put("numero_documento", empresa.getRuc());
+            emisor.put("apellidos_y_nombres_o_razon_social", empresa.getRazonSocial());
+            emisor.put("nombre_comercial", empresa.getRazonSocial());
+            emisor.put("direccion", empresa.getDireccion() != null ? empresa.getDireccion() : "-");
+            emisor.put("codigo_pais", "PE");
+            payload.put("datos_del_emisor", emisor);
+        }
 
         // --- Datos del Cliente ---
         Map<String, Object> receptor = new HashMap<>();
@@ -91,9 +99,7 @@ public class SunatService {
         receptor.put("correo_electronico", cliente.getEmail() != null ? cliente.getEmail() : "");
         receptor.put("telefono", "-");
 
-        // ✅ LÓGICA CONDICIONAL: Factura usa datos del Request, Boleta usa datos de la BD
         if ("FACTURA".equalsIgnoreCase(tipoComprobanteId)) {
-            // Hacemos un pequeño fallback para evitar nulos en caso de que accidentalmente no envíen el RUC
             receptor.put("numero_documento", (ruc != null && !ruc.isEmpty()) ? ruc : cliente.getNumeroDocumento());
             receptor.put("apellidos_y_nombres_o_razon_social", (razonSocial != null && !razonSocial.isEmpty()) ? razonSocial : cliente.getNombres() + " " + (cliente.getApellidos() != null ? cliente.getApellidos() : ""));
             receptor.put("direccion", (direccionFactura != null && !direccionFactura.isEmpty()) ? direccionFactura : "-");
@@ -102,49 +108,75 @@ public class SunatService {
             receptor.put("apellidos_y_nombres_o_razon_social", cliente.getNombres() + " " + (cliente.getApellidos() != null ? cliente.getApellidos() : ""));
             receptor.put("direccion", cliente.getDireccion() != null ? cliente.getDireccion() : "-");
         }
-
         payload.put("datos_del_cliente_o_receptor", receptor);
 
-        // --- Cálculos ---
-        double montoTotal = pago.getMontoAbonado();
-        double valorUnitario = ("20".equals(tipoIgv) || "30".equals(tipoIgv)) ? montoTotal : (montoTotal / 1.18);
-        double igv = ("20".equals(tipoIgv) || "30".equals(tipoIgv)) ? 0.0 : (montoTotal - valorUnitario);
+        // --- ITERACIÓN DE ÍTEMS Y SUMATORIA TOTAL ---
+        List<Map<String, Object>> items = new ArrayList<>();
+        double sumaTotalVenta = 0.0;
+        double sumaTotalValor = 0.0;
+        double sumaTotalIgv = 0.0;
 
-        // --- Totales ---
+        String nombreManzana = (contratoBase.getLote().getManzana() != null) ? contratoBase.getLote().getManzana().getNombre() : "";
+        String numeroLote = (contratoBase.getLote().getNumero() != null) ? String.valueOf(contratoBase.getLote().getNumero()) : "";
+        String codigoLote = "MZ " + nombreManzana + "-" + numeroLote;
+
+        for (Pago pago : pagos) {
+            double montoItem = pago.getMontoAbonado();
+            double valorUnitarioItem = ("20".equals(tipoIgv) || "30".equals(tipoIgv)) ? montoItem : (montoItem / 1.18);
+            double igvItem = ("20".equals(tipoIgv) || "30".equals(tipoIgv)) ? 0.0 : (montoItem - valorUnitarioItem);
+
+            sumaTotalVenta += montoItem;
+            sumaTotalValor += valorUnitarioItem;
+            sumaTotalIgv += igvItem;
+
+            // ✅ NUEVO: FORMATO EXACTO DE LA DESCRIPCIÓN CON FECHA Y "PAGO ANTICIPADO"
+            Integer numCuota = pago.getCuota().getNumeroCuota();
+            String fechaPagoStr = (pago.getFechaPago() != null ? pago.getFechaPago() : java.time.LocalDate.now())
+                    .format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+            String descripcionFila = "";
+
+            if (numCuota != null && numCuota == 0) {
+                // Es Cuota Inicial (0)
+                descripcionFila = "POR EL MONTO DE SEPARACION ANTICIPO RECIBIDO: " + codigoLote + " PROYECTO DENOMINADO LOTIZACION OLMOS,SECTOR OLMOS,DISTRITO DE OLMOS - LAMBAYEQUE. DEL " + fechaPagoStr + " **PAGO ANTICIPADO**";
+            } else {
+                // Es Cuota Normal (1, 2, 3...)
+                String numeroCuotaTexto = (numCuota != null) ? String.valueOf(numCuota) : "";
+                descripcionFila = "ANTICIPO RECIBIDO: CUOTA " + numeroCuotaTexto + " , " + codigoLote + " PROYECTO DENOMINADO LOTIZACION OLMOS,SECTOR OLMOS,DISTRITO DE OLMOS - LAMBAYEQUE. DEL " + fechaPagoStr + " **PAGO ANTICIPADO**";
+            }
+
+            Map<String, Object> item = new HashMap<>();
+            item.put("codigo_interno", codigoLote);
+            item.put("codigo_producto_sunat", "51121703");
+            item.put("unidad_de_medida", "NIU");
+            item.put("descripcion", descripcionFila);
+            item.put("cantidad", 1);
+            item.put("valor_unitario", Math.round(valorUnitarioItem * 100.0) / 100.0);
+            item.put("codigo_tipo_precio", "01");
+            item.put("codigo_tipo_afectacion_igv", tipoIgv);
+            item.put("porcentaje_igv", "10".equals(tipoIgv) ? 18 : 0);
+            item.put("precio_unitario", Math.round((valorUnitarioItem + igvItem) * 100.0) / 100.0);
+            item.put("total_base_igv", Math.round(valorUnitarioItem * 100.0) / 100.0);
+            item.put("total_igv", Math.round(igvItem * 100.0) / 100.0);
+            item.put("total_impuestos", Math.round(igvItem * 100.0) / 100.0);
+            item.put("total_valor_item", Math.round(valorUnitarioItem * 100.0) / 100.0);
+            item.put("total_item", Math.round(montoItem * 100.0) / 100.0);
+
+            items.add(item);
+        }
+        payload.put("items", items);
+
+        // --- Totales de la Cabecera ---
         Map<String, Object> totales = new HashMap<>();
         totales.put("total_exportacion", 0);
-        totales.put("total_operaciones_gravadas", ("10".equals(tipoIgv)) ? Math.round(valorUnitario * 100.0) / 100.0 : 0);
-        totales.put("total_operaciones_exoneradas", "20".equals(tipoIgv) ? Math.round(montoTotal * 100.0) / 100.0 : 0);
-        totales.put("total_operaciones_inafectas", "30".equals(tipoIgv) ? Math.round(montoTotal * 100.0) / 100.0 : 0);
+        totales.put("total_operaciones_gravadas", ("10".equals(tipoIgv)) ? Math.round(sumaTotalValor * 100.0) / 100.0 : 0);
+        totales.put("total_operaciones_exoneradas", "20".equals(tipoIgv) ? Math.round(sumaTotalVenta * 100.0) / 100.0 : 0);
+        totales.put("total_operaciones_inafectas", "30".equals(tipoIgv) ? Math.round(sumaTotalVenta * 100.0) / 100.0 : 0);
         totales.put("total_operaciones_gratuitas", 0);
-        totales.put("total_igv", Math.round(igv * 100.0) / 100.0);
-        totales.put("total_impuestos", Math.round(igv * 100.0) / 100.0);
-        totales.put("total_valor", Math.round(valorUnitario * 100.0) / 100.0);
-        totales.put("total_venta", Math.round(montoTotal * 100.0) / 100.0);
+        totales.put("total_igv", Math.round(sumaTotalIgv * 100.0) / 100.0);
+        totales.put("total_impuestos", Math.round(sumaTotalIgv * 100.0) / 100.0);
+        totales.put("total_valor", Math.round(sumaTotalValor * 100.0) / 100.0);
+        totales.put("total_venta", Math.round(sumaTotalVenta * 100.0) / 100.0);
         payload.put("totales", totales);
-
-        // --- Ítems ---
-        List<Map<String, Object>> items = new ArrayList<>();
-        Map<String, Object> item = new HashMap<>();
-
-        item.put("codigo_interno", codigoLote);
-        item.put("codigo_producto_sunat", "51121703");
-        item.put("unidad_de_medida", "NIU");
-        item.put("descripcion", descripcionDinamica);
-        item.put("cantidad", 1);
-        item.put("valor_unitario", Math.round(valorUnitario * 100.0) / 100.0);
-        item.put("codigo_tipo_precio", "01");
-        item.put("codigo_tipo_afectacion_igv", tipoIgv);
-        item.put("porcentaje_igv", "10".equals(tipoIgv) ? 18 : 0);
-        item.put("precio_unitario", Math.round((valorUnitario + igv) * 100.0) / 100.0);
-        item.put("total_base_igv", Math.round(valorUnitario * 100.0) / 100.0);
-        item.put("total_igv", Math.round(igv * 100.0) / 100.0);
-        item.put("total_impuestos", Math.round(igv * 100.0) / 100.0);
-        item.put("total_valor_item", Math.round(valorUnitario * 100.0) / 100.0);
-        item.put("total_item", Math.round(montoTotal * 100.0) / 100.0);
-        items.add(item);
-
-        payload.put("items", items);
 
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
 

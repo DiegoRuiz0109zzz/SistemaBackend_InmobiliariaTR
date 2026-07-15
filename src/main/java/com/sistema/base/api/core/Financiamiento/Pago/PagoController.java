@@ -86,19 +86,6 @@ public class PagoController {
         return ResponseEntity.ok("Sincronización y recálculo de días de retraso completado para el contrato N°: " + contratoId);
     }
 
-    @GetMapping("/{id}/nota-venta")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<byte[]> descargarNotaVenta(@PathVariable Long id) {
-        byte[] pdfBytes = pagoService.generarNotaVentaPdf(id);
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_PDF);
-        headers.setContentDispositionFormData("inline", "Nota_Abono_" + id + ".pdf");
-        headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
-
-        return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
-    }
-
     @GetMapping("/comprobante/{numeroComprobante}/pdf")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<byte[]> descargarNotaAbonoPdf(@PathVariable String numeroComprobante) {
@@ -120,6 +107,19 @@ public class PagoController {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_PDF);
         headers.setContentDispositionFormData("inline", "Recibo_Ingreso_" + numeroComprobante + ".pdf");
+        headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
+
+        return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
+    }
+
+    @GetMapping("/comprobante-sunat/{numeroComprobante}/pdf")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<byte[]> descargarComprobanteSunatPdf(@PathVariable String numeroComprobante) {
+        byte[] pdfBytes = pagoService.generarComprobanteElectronicoPdf(numeroComprobante);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_PDF);
+        headers.setContentDispositionFormData("inline", "Comprobante_" + numeroComprobante + ".pdf");
         headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
 
         return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
@@ -154,22 +154,12 @@ public class PagoController {
         return ResponseEntity.ok(pagoService.obtenerReporteCajaFisica());
     }
 
-//    @PostMapping("/{pagoId}/emitir-sunat")
-//    @PreAuthorize("hasAuthority('PROCESAR_PAGO')")
-//    public ResponseEntity<Pago> emitirSunat(
-//            @PathVariable Long pagoId,
-//            @RequestParam TipoComprobante tipoComprobante, // Ej: BOLETA o FACTURA
-//            @RequestParam String serie) {                  // Ej: B001 o F001
-//
-//        Pago pagoActualizado = pagoService.emitirComprobanteSunat(pagoId, tipoComprobante, serie);
-//        return ResponseEntity.ok(pagoActualizado);
-//    }
 
     @PostMapping("/facturacion/registrar-pago")
     @PreAuthorize("hasAuthority('CREAR_PAGO')")
-    public ResponseEntity<Pago> registrarPagoYEmitirSunatJson(@RequestBody PagoSunatRequest request) {
+    public ResponseEntity<List<Pago>> registrarPagoYEmitirSunatJson(@RequestBody PagoSunatRequest request) { // ✅ Cambia a List<Pago>
 
-        Pago pagoRealizado = pagoService.registrarPagoYEmitirSunat(
+        List<Pago> pagosRealizados = pagoService.registrarPagoYEmitirSunat( // ✅ Recibe una lista
                 request.getCuotaId(),
                 request.getMontoAbonado(),
                 request.getMetodoPago(),
@@ -178,13 +168,12 @@ public class PagoController {
                 request.getSerie(),
                 request.getTipoIgv(),
                 request.getTipoDoc(),
-                // ✅ AQUÍ ESTÁN LOS 3 ARGUMENTOS FALTANTES
                 request.getRuc(),
                 request.getRazonSocial(),
                 request.getDireccionFactura()
         );
 
-        return ResponseEntity.ok(pagoRealizado);
+        return ResponseEntity.ok(pagosRealizados);
     }
 
 }

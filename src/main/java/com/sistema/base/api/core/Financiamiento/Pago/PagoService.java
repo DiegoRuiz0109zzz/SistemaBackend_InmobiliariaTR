@@ -116,9 +116,6 @@ public class PagoService {
         return String.format("%s-%06d", serieActiva.getSerie(), nuevoCorrelativo);
     }
 
-    // =========================================================================================
-    // ✅ REGISTRAR PAGO DIRECTO
-    // =========================================================================================
     @Transactional
     public List<Pago> registrarPago(Long cuotaId, Double montoAbonado, String metodoPago, String numeroOperacion, String descripcion, MultipartFile voucherFile) {
         Cuota cuotaInicialRequest = cuotaRepository.findById(cuotaId)
@@ -235,9 +232,6 @@ public class PagoService {
         return pagosGenerados;
     }
 
-    // =========================================================================================
-    // ✅ PROCESAR PAGO PENDIENTE
-    // =========================================================================================
     @Transactional
     public List<Pago> procesarPagoPendiente(Long pagoId, String metodoPago, String numeroOperacion, String descripcion, MultipartFile voucherFile) {
         Pago pagoOriginal = pagoRepository.findById(pagoId).orElseThrow(() -> new RuntimeException("Pago no encontrado."));
@@ -408,17 +402,6 @@ public class PagoService {
     }
 
     @Transactional(readOnly = true)
-    public byte[] generarNotaVentaPdf(Long pagoId) {
-        Pago pago = pagoRepository.findById(pagoId).orElseThrow(() -> new RuntimeException("Pago no encontrado"));
-
-        if (pago.getNumeroComprobante() == null || pago.getNumeroComprobante().isEmpty()) {
-            throw new RuntimeException("El pago no tiene un comprobante asignado.");
-        }
-
-        return generarNotaAbonoMultiPdf(pago.getNumeroComprobante());
-    }
-
-    @Transactional(readOnly = true)
     public byte[] generarNotaAbonoMultiPdf(String numeroComprobante) {
         List<Pago> pagos = pagoRepository.findByNumeroComprobante(numeroComprobante);
         if (pagos.isEmpty()) throw new RuntimeException("Comprobante no encontrado.");
@@ -438,6 +421,29 @@ public class PagoService {
         context.setVariable("imgLogo", getImagenBase64("logo_terranort.png"));
 
         return compilarPdf("nota-abono", context);
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] generarComprobanteElectronicoPdf(String numeroComprobante) {
+        List<Pago> pagos = pagoRepository.findByNumeroComprobante(numeroComprobante);
+        if (pagos.isEmpty()) throw new RuntimeException("Comprobante no encontrado.");
+
+        Contrato contrato = pagos.get(0).getCuota().getContrato();
+        Empresa empresa = empresaRepository.findById(1L).orElse(null);
+        double totalAbonado = pagos.stream().mapToDouble(Pago::getMontoAbonado).sum();
+
+        Context context = new Context();
+        context.setVariable("pagos", pagos);
+        context.setVariable("pagoBase", pagos.get(0)); // Contiene el tipo (FACTURA/BOLETA) y número (F001-...)
+        context.setVariable("totalAbonado", totalAbonado);
+        context.setVariable("cliente", contrato.getCliente());
+        context.setVariable("contrato", contrato);
+        context.setVariable("montoEnLetras", NumeroALetrasConverter.convertir(totalAbonado, "SOLES"));
+        context.setVariable("empresa", empresa);
+        context.setVariable("imgLogo", getImagenBase64("logo_terranort.png"));
+
+        // Asegúrate de guardar el HTML anterior con el nombre "comprobante-electronico.html" en la carpeta templates
+        return compilarPdf("comprobante-electronico", context);
     }
 
     @Transactional(readOnly = true)
@@ -577,34 +583,26 @@ public class PagoService {
         return reporte;
     }
 
-    // =========================================================================================
-// ✅ EMISIÓN DE COMPROBANTE ELECTRÓNICO (FACTURA / BOLETA)
-// =========================================================================================
     @Transactional
-    public Pago registrarPagoYEmitirSunat(Long cuotaId, Double montoAbonado, String metodoPago, String descripcion,
-                                          TipoComprobante tipoComprobante, String prefijoSerie, String tipoIgv, String tipoDoc,
-                                          String ruc, String razonSocial, String direccionFactura) {
+    public List<Pago> registrarPagoYEmitirSunat(Long cuotaId, Double montoAbonado, String metodoPago, String descripcionPersonalizada,
+                                                TipoComprobante tipoComprobante, String prefijoSerie, String tipoIgv, String tipoDoc,
+                                                String ruc, String razonSocial, String direccionFactura) {
 
-        Cuota cuota = cuotaRepository.findById(cuotaId).orElseThrow(() -> new RuntimeException("Cuota no encontrada"));
+        Cuota cuotaInicialRequest = cuotaRepository.findById(cuotaId).orElseThrow(() -> new RuntimeException("Cuota no encontrada"));
+        Contrato contrato = cuotaInicialRequest.getContrato();
 
-        // ✅ LÓGICA DE VALORES POR DEFECTO
-        // Si no envías tipoIgv en Postman, asume "20" (Exonerado).
+        // 1. Buscamos todas las cuotas pendientes del contrato
+        List<Cuota> cuotasPendientes = cuotaRepository.findByContratoIdAndEnabledTrueOrderByNumeroCuotaAsc(contrato.getId())
+                .stream().filter(c -> c.getMontoPagado() < c.getMontoTotal()).collect(Collectors.toList());
+
+        double deudaTotal = cuotasPendientes.stream().mapToDouble(c -> c.getMontoTotal() - c.getMontoPagado()).sum();
+        if (montoAbonado > deudaTotal) {
+            throw new RuntimeException("El monto a abonar (S/ " + montoAbonado + ") supera la deuda total pendiente (S/ " + deudaTotal + ").");
+        }
+
         String igvDefinitivo = (tipoIgv != null && !tipoIgv.trim().isEmpty()) ? tipoIgv : "20";
 
-        // 1. Guardamos el Pago Físico en BD
-        Pago nuevoPago = Pago.builder()
-                .cuota(cuota)
-                .montoAbonado(montoAbonado)
-                .metodoPago(metodoPago)
-                .descripcion(descripcion)
-                .estado(EstadoPago.PROCESADO)
-                .fechaRegistro(LocalDate.now())
-                .fechaPago(LocalDate.now())
-                .build();
-
-        Pago pagoGuardado = pagoRepository.save(nuevoPago);
-
-        // 2. Buscamos el correlativo de la serie activa
+        // 2. Generamos el correlativo del comprobante electrónico
         Serie serieActiva = serieRepository.findActiveSerieForUpdate(tipoComprobante)
                 .orElseThrow(() -> new RuntimeException("No hay serie activa para " + tipoComprobante.name()));
 
@@ -612,35 +610,91 @@ public class PagoService {
         serieActiva.setUltimoCorrelativo(nuevoCorrelativo);
         serieRepository.save(serieActiva);
 
-        // 3. Emitimos a SUNAT pasando el igvDefinitivo y los nuevos datos
-        Map<String, Object> res = sunatService.emitirComprobante(
-                pagoGuardado,
+        String numeroComprobanteAgrupado = prefijoSerie + "-" + String.format("%06d", nuevoCorrelativo);
+
+        // 3. DISTRIBUCIÓN DEL PAGO EN MÚLTIPLES CUOTAS
+        Double montoRestante = montoAbonado;
+        List<Pago> pagosGenerados = new ArrayList<>();
+        LocalDate fechaPagoActual = LocalDate.now();
+
+        for (Cuota c : cuotasPendientes) {
+            if (montoRestante <= 0) break;
+
+            Double saldoCuota = c.getMontoTotal() - c.getMontoPagado();
+            Double montoAAplicar = Math.min(montoRestante, saldoCuota);
+
+            boolean pagoADestiempo = fechaPagoActual.isAfter(c.getFechaVencimiento());
+            int diasRetraso = pagoADestiempo ? (int) ChronoUnit.DAYS.between(c.getFechaVencimiento(), fechaPagoActual) : 0;
+
+            String nombreCuota = (c.getNumeroCuota() != null && c.getNumeroCuota() == 0) ? "INICIAL" : "CUOTA " + c.getNumeroCuota();
+
+            // Armamos la descripción base (Ej: "SALDO DE CUOTA 2")
+            String descDinamica;
+            if (Double.compare(montoAAplicar, saldoCuota) == 0) {
+                descDinamica = (c.getMontoPagado() == 0.0) ? "ABONO DE " + nombreCuota : "SALDO DE " + nombreCuota;
+            } else {
+                descDinamica = "A CUENTA " + nombreCuota;
+            }
+
+            if (descripcionPersonalizada != null && !descripcionPersonalizada.trim().isEmpty()) {
+                descDinamica += " - " + descripcionPersonalizada;
+            }
+
+            Pago pago = Pago.builder()
+                    .cuota(c)
+                    .montoAbonado(montoAAplicar)
+                    .metodoPago(metodoPago)
+                    .descripcion(descDinamica) // Guardamos la descripción específica de esta porción
+                    .estado(EstadoPago.PROCESADO)
+                    .diasRetraso(diasRetraso)
+                    .pagoADestiempo(pagoADestiempo)
+                    .tipoComprobante(tipoComprobante)
+                    .numeroComprobante(numeroComprobanteAgrupado)
+                    .fechaRegistro(LocalDate.now())
+                    .fechaPago(LocalDate.now())
+                    .build();
+
+            c.setMontoPagado(c.getMontoPagado() + montoAAplicar);
+            c.setEstado(c.getMontoPagado() >= c.getMontoTotal() ? (pagoADestiempo ? EstadoCuota.PAGADO_DESTIEMPO : EstadoCuota.PAGADO_TOTAL) : EstadoCuota.PAGADO_PARCIAL);
+
+            cuotaRepository.save(c);
+            pagosGenerados.add(pagoRepository.save(pago));
+            montoRestante -= montoAAplicar;
+        }
+
+        // ✅ NUEVO: Buscamos los datos de la Empresa (Emisor)
+        Empresa empresa = empresaRepository.findById(1L)
+                .orElseThrow(() -> new RuntimeException("Los datos de la empresa no están configurados en la base de datos."));
+
+        // 4. EMITIMOS A SUNAT PASANDO LA LISTA COMPLETA DE PAGOS
+        Map<String, Object> res = sunatService.emitirComprobanteMultiple(
+                pagosGenerados,
                 tipoComprobante.name(),
                 prefijoSerie,
                 String.valueOf(nuevoCorrelativo),
-                igvDefinitivo,        // <-- SE PASA LA VARIABLE CON EL VALOR POR DEFECTO
-                tipoDoc,              // <-- Si es nulo, SunatService lo asume
-                ruc,                  // <-- Se pasa al servicio
-                razonSocial,          // <-- Se pasa al servicio
-                direccionFactura      // <-- Se pasa al servicio
+                igvDefinitivo,
+                tipoDoc,
+                ruc,
+                razonSocial,
+                direccionFactura,
+                empresa // ✅ AQUÍ SE AGREGA LA EMPRESA COMO DÉCIMO PARÁMETRO
         );
 
-        // 4. Validamos la respuesta y guardamos los enlaces generados
+        // 5. Validamos la respuesta y actualizamos todos los pagos con los links
         if (res != null && res.containsKey("success") && (Boolean) res.get("success")) {
             Map<String, Object> data = (Map<String, Object>) res.get("data");
             Map<String, Object> links = (Map<String, Object>) res.get("links");
 
-            pagoGuardado.setTipoComprobante(tipoComprobante);
-            pagoGuardado.setNumeroComprobante(prefijoSerie + "-" + String.format("%06d", nuevoCorrelativo));
-            pagoGuardado.setEnlacePdfSunat((String) links.get("pdf"));
-            pagoGuardado.setEnlaceXmlSunat((String) links.get("xml"));
-
-            if (data != null && data.containsKey("external_id")) {
-                pagoGuardado.setExternalIdSunat((String) data.get("external_id"));
+            for (Pago p : pagosGenerados) {
+                p.setEnlacePdfSunat((String) links.get("pdf"));
+                p.setEnlaceXmlSunat((String) links.get("xml"));
+                if (data != null && data.containsKey("external_id")) {
+                    p.setExternalIdSunat((String) data.get("external_id"));
+                }
+                p.setEstadoSunat("ACEPTADO");
+                pagoRepository.save(p);
             }
-
-            pagoGuardado.setEstadoSunat("ACEPTADO");
-            return pagoRepository.save(pagoGuardado);
+            return pagosGenerados;
         } else {
             String msjError = res != null && res.containsKey("message") ? (String) res.get("message") : "Respuesta desconocida";
             throw new RuntimeException("SUNAT rechazó el comprobante: " + msjError);

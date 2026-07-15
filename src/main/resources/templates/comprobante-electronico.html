@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8" />
+    <title>Comprobante Electrónico</title>
+    <style>
+        @page { size: A4; margin: 1.5cm 1.5cm; }
+        body { font-family: 'Arial', sans-serif; font-size: 9pt; color: #000; margin: 0; padding: 0; }
+        .text-center { text-align: center; } .text-right { text-align: right; } .text-left { text-align: left; }
+        .bold { font-weight: bold; } .italic { font-style: italic; } .uppercase { text-transform: uppercase; }
+
+        .header-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        .header-table td { vertical-align: middle; }
+        .company-name { font-size: 14pt; font-weight: bold; margin-bottom: 5px; }
+        .company-info { font-size: 10pt; line-height: 1.3; }
+
+        .box-ruc { border: 2px solid #000; text-align: center; padding: 15px 10px; width: 230px; font-size: 12pt; border-radius: 5px; }
+        .box-ruc .title-doc { font-size: 14pt; font-weight: bold; margin: 8px 0; }
+
+        .client-table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-bottom: 15px; }
+        .client-table td { padding: 5px 2px; vertical-align: top; }
+        .client-table .label { font-weight: bold; width: 12%; }
+
+        .items-table { width: 100%; border-collapse: collapse; border: 1px solid #000; }
+        .items-table th { background-color: #1b4f8f; color: #ffffff; border: 1px solid #000; padding: 6px; font-size: 9pt; }
+        .items-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 6px; font-size: 9pt; }
+        .filler-row td { height: 350px; border-bottom: 1px solid #000; }
+
+        .totals-container { width: 100%; border-collapse: collapse; margin-top: 5px; }
+        .totals-words { vertical-align: top; width: 60%; font-size: 9pt; padding-top: 4px; }
+        .totals-numbers { width: 100%; border-collapse: collapse; border: 1px solid #000; }
+        .totals-numbers td { padding: 4px 5px; font-size: 9.5pt; border-bottom: 1px solid #ddd; }
+        .totals-numbers .label-total { font-weight: bold; width: 60%; }
+        .totals-numbers .val-total { text-align: right; width: 40%; }
+        .totals-numbers tr:last-child td { border-bottom: none; font-size: 11pt; font-weight: bold; }
+
+        .obs-box { width: 100%; padding: 10px 0; margin-top: 15px; font-size: 9pt; line-height: 1.4; }
+        .footer-thanks { margin-top: 20px; font-size: 10pt; text-align: center; }
+    </style>
+</head>
+<body>
+
+<table class="header-table">
+    <tr>
+        <td style="width: 25%; text-align: left;">
+            <img th:if="${imgLogo != null}" th:src="${imgLogo}" style="max-height: 80px; max-width: 180px;" alt="Logo" />
+        </td>
+        <td style="width: 45%;" class="text-center company-info">
+            <div class="company-name uppercase" th:text="${empresa != null ? empresa.razonSocial : 'INMOBILIARIA TERRANORTE S.A.C.'}"></div>
+            <div th:text="${empresa != null ? empresa.direccion : 'LA LIBERTAD - TRUJILLO - HUANCHACO'}"></div>
+            <div th:text="'Cel: ' + ${empresa != null ? empresa.telefono : '981712145'}"></div>
+            <div th:text="${empresa != null ? empresa.email : 'inmobiliariaterranort@gmail.com'}"></div>
+        </td>
+        <td style="width: 30%;" class="text-right">
+            <div class="box-ruc">
+                <div th:text="'RUC: ' + ${empresa != null ? empresa.ruc : '20613699890'}"></div>
+
+                <!-- TÍTULO DINÁMICO: FACTURA O BOLETA -->
+                <div class="title-doc"
+                     th:text="${pagoBase != null and pagoBase.tipoComprobante != null and pagoBase.tipoComprobante.name() == 'FACTURA' ? 'FACTURA ELECTRÓNICA' : 'BOLETA DE VENTA ELECTRÓNICA'}">
+                </div>
+
+                <div th:text="${pagoBase != null ? pagoBase.numeroComprobante : 'B001-000000'}"></div>
+            </div>
+        </td>
+    </tr>
+</table>
+
+<table class="client-table">
+    <tr>
+        <td class="label">SEÑOR(ES):</td>
+        <td class="uppercase" style="width: 50%;" th:text="${cliente.nombres + ' ' + (cliente.apellidos != null ? cliente.apellidos : '')}">JUAN PEREZ</td>
+        <td class="label">RUC/DNI:</td>
+        <td style="width: 26%;" th:text="${cliente.numeroDocumento}">00000000</td>
+    </tr>
+    <tr>
+        <td class="label">DIRECCIÓN:</td>
+        <td class="uppercase" th:text="${cliente.direccion != null ? cliente.direccion : '-'}"></td>
+        <td class="label">FECHA EMISIÓN:</td>
+        <td th:text="${#temporals.format(pagoBase.fechaPago, 'dd/MM/yyyy')}">01/01/2026</td>
+    </tr>
+    <tr>
+        <td class="label">FORMA PAGO:</td>
+        <td class="uppercase" th:text="${pagoBase.metodoPago}">EFECTIVO</td>
+        <td class="label">MONEDA:</td>
+        <td class="uppercase">SOLES</td>
+    </tr>
+</table>
+
+<table class="items-table">
+    <thead>
+    <tr>
+        <th style="width: 8%;">CANT.</th>
+        <th style="width: 10%;">U.M.</th>
+        <th style="width: 15%;">CÓDIGO</th>
+        <th style="width: 39%;">DESCRIPCIÓN</th>
+        <th style="width: 14%;">V. UNITARIO</th>
+        <th style="width: 14%;">IMPORTE</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="pago : ${pagos}">
+        <td class="text-center" style="vertical-align: top;">1</td>
+        <!-- CÓDIGO INTERNACIONAL SUNAT -->
+        <td class="text-center uppercase" style="vertical-align: top;">NIU</td>
+        <!-- CÓDIGO INTERNO (Ej: MZ B-49) -->
+        <td class="text-center uppercase" style="vertical-align: top;">
+            <span th:text="'MZ ' + ${contrato.lote.manzana.nombre} + '-' + ${contrato.lote.numero}"></span>
+        </td>
+        <td class="uppercase" style="vertical-align: top;">
+            <span th:text="${pago.descripcion != null ? pago.descripcion : 'PAGO DE CUOTA'}"></span>
+            <span th:text="'. PROYECTO LOTIZACION OLMOS, LAMBAYEQUE'"></span>
+        </td>
+        <td class="text-right" style="vertical-align: top;" th:text="${#numbers.formatDecimal(pago.montoAbonado, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+        <td class="text-right" style="vertical-align: top;" th:text="${#numbers.formatDecimal(pago.montoAbonado, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+    </tr>
+    <!-- Espacio en blanco para empujar los totales hacia abajo -->
+    <tr class="filler-row"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+    </tbody>
+</table>
+
+<table class="totals-container">
+    <tr>
+        <td class="totals-words">
+            <span class="bold">SON:</span> <span class="uppercase" th:text="${montoEnLetras}">CERO SOLES</span>
+
+            <div class="obs-box">
+                <span class="bold uppercase">OBSERVACIONES:</span><br/>
+                - Representación impresa del comprobante electrónico.<br/>
+                - Puede consultar este comprobante en el portal de SUNAT o en nuestro sistema.
+            </div>
+        </td>
+        <td style="padding: 0; width: 40%; padding-left: 20px;">
+            <table class="totals-numbers">
+                <tr>
+                    <td class="label-total">OP. GRAVADAS</td>
+                    <td class="val-total">S/ 0.00</td>
+                </tr>
+                <tr>
+                    <!-- Como todo se envía con tipoIgv="20", el total se refleja en Exoneradas -->
+                    <td class="label-total">OP. EXONERADAS</td>
+                    <td class="val-total" th:text="'S/ ' + ${#numbers.formatDecimal(totalAbonado, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+                </tr>
+                <tr>
+                    <td class="label-total">OP. INAFECTAS</td>
+                    <td class="val-total">S/ 0.00</td>
+                </tr>
+                <tr>
+                    <td class="label-total">I.G.V. (18%)</td>
+                    <td class="val-total">S/ 0.00</td>
+                </tr>
+                <tr>
+                    <td class="label-total">IMPORTE TOTAL</td>
+                    <td class="val-total" th:text="'S/ ' + ${#numbers.formatDecimal(totalAbonado, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+
+<div class="footer-thanks bold uppercase">¡GRACIAS POR SU PREFERENCIA!</div>
+
+</body>
+</html>
