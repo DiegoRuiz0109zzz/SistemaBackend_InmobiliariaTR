@@ -65,14 +65,14 @@ public class SunatService {
         payload.put("hora_de_emision", java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")));
         payload.put("codigo_tipo_moneda", "PEN");
 
-        // ✅ CAMBIO: 0104 es el Código Oficial SUNAT para "Venta Interna - Anticipos"
-        payload.put("codigo_tipo_operacion", "0104");
+        // ✅ CORREGIDO: 0104 es el código obligatorio de SUNAT para Anticipos
+        payload.put("codigo_tipo_operacion", "0101");
 
         payload.put("fecha_de_vencimiento", java.time.LocalDate.now().toString());
         payload.put("forma_de_pago", "Contado");
 
-        // ✅ NUEVO: --- OBSERVACIONES (Método de Pago + Nro Operación) ---
-        String obsMetodo = pagos.get(0).getMetodoPago() != null ? pagos.get(0).getMetodoPago() : "";
+        // ✅ CORREGIDO: Limpiamos la palabra "TRANSFERENCIA " para que solo viaje "BCP 123456"
+        String obsMetodo = pagos.get(0).getMetodoPago() != null ? pagos.get(0).getMetodoPago().replace("TRANSFERENCIA ", "").trim() : "";
         String obsOperacion = pagos.get(0).getNumeroOperacion() != null ? pagos.get(0).getNumeroOperacion() : "";
         String observacionSunat = (obsMetodo + " " + obsOperacion).trim();
 
@@ -83,7 +83,7 @@ public class SunatService {
         // --- Datos del Emisor (Tu Empresa) ---
         if (empresa != null) {
             Map<String, Object> emisor = new HashMap<>();
-            emisor.put("codigo_tipo_documento_identidad", "6");
+            emisor.put("codigo_tipo_documento_identidad", "6"); // 6 = RUC
             emisor.put("numero_documento", empresa.getRuc());
             emisor.put("apellidos_y_nombres_o_razon_social", empresa.getRazonSocial());
             emisor.put("nombre_comercial", empresa.getRazonSocial());
@@ -129,20 +129,8 @@ public class SunatService {
             sumaTotalValor += valorUnitarioItem;
             sumaTotalIgv += igvItem;
 
-            // ✅ NUEVO: FORMATO EXACTO DE LA DESCRIPCIÓN CON FECHA Y "PAGO ANTICIPADO"
-            Integer numCuota = pago.getCuota().getNumeroCuota();
-            String fechaPagoStr = (pago.getFechaPago() != null ? pago.getFechaPago() : java.time.LocalDate.now())
-                    .format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-            String descripcionFila = "";
-
-            if (numCuota != null && numCuota == 0) {
-                // Es Cuota Inicial (0)
-                descripcionFila = "POR EL MONTO DE SEPARACION ANTICIPO RECIBIDO: " + codigoLote + " PROYECTO DENOMINADO LOTIZACION OLMOS,SECTOR OLMOS,DISTRITO DE OLMOS - LAMBAYEQUE. DEL " + fechaPagoStr + " **PAGO ANTICIPADO**";
-            } else {
-                // Es Cuota Normal (1, 2, 3...)
-                String numeroCuotaTexto = (numCuota != null) ? String.valueOf(numCuota) : "";
-                descripcionFila = "ANTICIPO RECIBIDO: CUOTA " + numeroCuotaTexto + " , " + codigoLote + " PROYECTO DENOMINADO LOTIZACION OLMOS,SECTOR OLMOS,DISTRITO DE OLMOS - LAMBAYEQUE. DEL " + fechaPagoStr + " **PAGO ANTICIPADO**";
-            }
+            // ✅ CORREGIDO: Se quita la concatenación repetida de "codigoLote"
+            String descripcionFila = pago.getDescripcion();
 
             Map<String, Object> item = new HashMap<>();
             item.put("codigo_interno", codigoLote);

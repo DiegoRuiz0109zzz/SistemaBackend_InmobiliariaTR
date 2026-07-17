@@ -80,6 +80,10 @@
         <td class="label">MONEDA:</td>
         <td>SOLES</td>
     </tr>
+    <tr th:if="${pagoBase.numeroOperacion != null and pagoBase.numeroOperacion != ''}">
+        <td class="label">OBSERVACIÓN:</td>
+        <td class="uppercase" colspan="3" th:text="${#strings.replace(pagoBase.metodoPago, 'TRANSFERENCIA ', '')} + ' ' + ${pagoBase.numeroOperacion}"></td>
+    </tr>
 </table>
 
 <table class="items-table">
@@ -100,12 +104,7 @@
         <td class="text-center uppercase" style="vertical-align: top;">
             <span th:text="'Mz. ' + ${contrato.lote.manzana.nombre} + ' Lt. ' + ${contrato.lote.numero}"></span>
         </td>
-        <td class="uppercase" style="vertical-align: top;">
-            <span th:text="${pago.descripcion != null ? pago.descripcion : 'Pago de cuota'}">PAGO DE CUOTA</span>
-            <div style="font-size: 8pt; color: #555555; margin-top: 4px;" th:if="${pago.numeroOperacion != null}">
-                <span th:text="'Nro. Op: ' + ${pago.numeroOperacion}"></span>
-            </div>
-        </td>
+        <td class="uppercase" style="vertical-align: top;" th:text="${#strings.replace(pago.descripcion, '**PAGO ANTICIPADO**', '')}"></td>
         <td class="text-right" style="vertical-align: top;" th:text="${#numbers.formatDecimal(pago.montoAbonado, 1, 'COMMA', 2, 'POINT')}">0.00</td>
         <td class="text-right" style="vertical-align: top;" th:text="${#numbers.formatDecimal(pago.montoAbonado, 1, 'COMMA', 2, 'POINT')}">0.00</td>
     </tr>

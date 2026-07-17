@@ -54,12 +54,7 @@
         <td style="width: 30%;" class="text-right">
             <div class="box-ruc">
                 <div th:text="'RUC: ' + ${empresa != null ? empresa.ruc : '20613699890'}"></div>
-
-                <!-- TÍTULO DINÁMICO: FACTURA O BOLETA -->
-                <div class="title-doc"
-                     th:text="${pagoBase != null and pagoBase.tipoComprobante != null and pagoBase.tipoComprobante.name() == 'FACTURA' ? 'FACTURA ELECTRÓNICA' : 'BOLETA DE VENTA ELECTRÓNICA'}">
-                </div>
-
+                <div class="title-doc" th:text="${pagoBase != null and pagoBase.tipoComprobante != null and pagoBase.tipoComprobante.name() == 'FACTURA' ? 'FACTURA ELECTRÓNICA' : 'BOLETA DE VENTA ELECTRÓNICA'}"></div>
                 <div th:text="${pagoBase != null ? pagoBase.numeroComprobante : 'B001-000000'}"></div>
             </div>
         </td>
@@ -85,6 +80,10 @@
         <td class="label">MONEDA:</td>
         <td class="uppercase">SOLES</td>
     </tr>
+    <tr th:if="${pagoBase.numeroOperacion != null and pagoBase.numeroOperacion != ''}">
+        <td class="label">OBSERVACIÓN:</td>
+        <td class="uppercase" colspan="3" th:text="${#strings.replace(pagoBase.metodoPago, 'TRANSFERENCIA ', '')} + ' ' + ${pagoBase.numeroOperacion}"></td>
+    </tr>
 </table>
 
 <table class="items-table">
@@ -101,20 +100,14 @@
     <tbody>
     <tr th:each="pago : ${pagos}">
         <td class="text-center" style="vertical-align: top;">1</td>
-        <!-- CÓDIGO INTERNACIONAL SUNAT -->
         <td class="text-center uppercase" style="vertical-align: top;">NIU</td>
-        <!-- CÓDIGO INTERNO (Ej: MZ B-49) -->
         <td class="text-center uppercase" style="vertical-align: top;">
             <span th:text="'MZ ' + ${contrato.lote.manzana.nombre} + '-' + ${contrato.lote.numero}"></span>
         </td>
-        <td class="uppercase" style="vertical-align: top;">
-            <span th:text="${pago.descripcion != null ? pago.descripcion : 'PAGO DE CUOTA'}"></span>
-            <span th:text="'. PROYECTO LOTIZACION OLMOS, LAMBAYEQUE'"></span>
-        </td>
+        <td class="uppercase" style="vertical-align: top;" th:text="${pago.descripcion}"></td>
         <td class="text-right" style="vertical-align: top;" th:text="${#numbers.formatDecimal(pago.montoAbonado, 1, 'COMMA', 2, 'POINT')}">0.00</td>
         <td class="text-right" style="vertical-align: top;" th:text="${#numbers.formatDecimal(pago.montoAbonado, 1, 'COMMA', 2, 'POINT')}">0.00</td>
     </tr>
-    <!-- Espacio en blanco para empujar los totales hacia abajo -->
     <tr class="filler-row"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
     </tbody>
 </table>
@@ -123,7 +116,6 @@
     <tr>
         <td class="totals-words">
             <span class="bold">SON:</span> <span class="uppercase" th:text="${montoEnLetras}">CERO SOLES</span>
-
             <div class="obs-box">
                 <span class="bold uppercase">OBSERVACIONES:</span><br/>
                 - Representación impresa del comprobante electrónico.<br/>
@@ -132,27 +124,11 @@
         </td>
         <td style="padding: 0; width: 40%; padding-left: 20px;">
             <table class="totals-numbers">
-                <tr>
-                    <td class="label-total">OP. GRAVADAS</td>
-                    <td class="val-total">S/ 0.00</td>
-                </tr>
-                <tr>
-                    <!-- Como todo se envía con tipoIgv="20", el total se refleja en Exoneradas -->
-                    <td class="label-total">OP. EXONERADAS</td>
-                    <td class="val-total" th:text="'S/ ' + ${#numbers.formatDecimal(totalAbonado, 1, 'COMMA', 2, 'POINT')}">0.00</td>
-                </tr>
-                <tr>
-                    <td class="label-total">OP. INAFECTAS</td>
-                    <td class="val-total">S/ 0.00</td>
-                </tr>
-                <tr>
-                    <td class="label-total">I.G.V. (18%)</td>
-                    <td class="val-total">S/ 0.00</td>
-                </tr>
-                <tr>
-                    <td class="label-total">IMPORTE TOTAL</td>
-                    <td class="val-total" th:text="'S/ ' + ${#numbers.formatDecimal(totalAbonado, 1, 'COMMA', 2, 'POINT')}">0.00</td>
-                </tr>
+                <tr><td class="label-total">OP. GRAVADAS</td><td class="val-total">S/ 0.00</td></tr>
+                <tr><td class="label-total">OP. EXONERADAS</td><td class="val-total" th:text="'S/ ' + ${#numbers.formatDecimal(totalAbonado, 1, 'COMMA', 2, 'POINT')}">0.00</td></tr>
+                <tr><td class="label-total">OP. INAFECTAS</td><td class="val-total">S/ 0.00</td></tr>
+                <tr><td class="label-total">I.G.V. (18%)</td><td class="val-total">S/ 0.00</td></tr>
+                <tr><td class="label-total">IMPORTE TOTAL</td><td class="val-total" th:text="'S/ ' + ${#numbers.formatDecimal(totalAbonado, 1, 'COMMA', 2, 'POINT')}">0.00</td></tr>
             </table>
         </td>
     </tr>

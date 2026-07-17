@@ -9,6 +9,7 @@ public class PagoSunatRequest {
     private Double montoAbonado;
     private String metodoPago;
     private String descripcion;
+    private String numeroOperacion;
     private TipoComprobante tipoComprobante; // Enum: BOLETA, FACTURA
     private String serie;                   // Ej: B001
     private String tipoIgv;                 // Ej: "20"

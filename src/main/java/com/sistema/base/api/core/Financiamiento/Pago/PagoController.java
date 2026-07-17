@@ -157,12 +157,13 @@ public class PagoController {
 
     @PostMapping("/facturacion/registrar-pago")
     @PreAuthorize("hasAuthority('CREAR_PAGO')")
-    public ResponseEntity<List<Pago>> registrarPagoYEmitirSunatJson(@RequestBody PagoSunatRequest request) { // ✅ Cambia a List<Pago>
+    public ResponseEntity<List<Pago>> registrarPagoYEmitirSunatJson(@RequestBody PagoSunatRequest request) {
 
-        List<Pago> pagosRealizados = pagoService.registrarPagoYEmitirSunat( // ✅ Recibe una lista
+        List<Pago> pagosRealizados = pagoService.registrarPagoYEmitirSunat(
                 request.getCuotaId(),
                 request.getMontoAbonado(),
                 request.getMetodoPago(),
+                request.getNumeroOperacion(), // ✅ SE AGREGA EL NÚMERO DE OPERACIÓN AQUÍ
                 request.getDescripcion(),
                 request.getTipoComprobante(),
                 request.getSerie(),
