@@ -14,6 +14,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/pagos")
@@ -175,6 +176,25 @@ public class PagoController {
         );
 
         return ResponseEntity.ok(pagosRealizados);
+    }
+
+    @PostMapping("/convertir-boleta")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> convertirAboleta(
+            @RequestParam String numeroNotaAbono,
+            @RequestParam String prefijoSerieBoleta,
+            @RequestParam(required = false) String tipoIgv,
+            @RequestParam(required = false) String ruc,
+            @RequestParam(required = false) String razonSocial,
+            @RequestParam(required = false) String direccionFactura) {
+        try {
+            List<Pago> resultado = pagoService.convertirNotaAbonoABoleta(
+                    numeroNotaAbono, prefijoSerieBoleta, tipoIgv, ruc, razonSocial, direccionFactura
+            );
+            return ResponseEntity.ok(Map.of("success", true, "message", "Nota de abono convertida a boleta exitosamente", "data", resultado));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", e.getMessage()));
+        }
     }
 
 }

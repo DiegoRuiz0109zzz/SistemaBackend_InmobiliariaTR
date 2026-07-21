@@ -555,6 +555,8 @@ public class ContratoService {
         context.setVariable("imgCabecera", getImagenBase64("cabezera.png"));
         context.setVariable("imgPie", getImagenBase64("pie.png"));
         context.setVariable("imgFondo", getImagenBase64("fondo.png"));
+        String precioTotalLetras = NumeroALetrasConverter.convertir(contrato.getPrecioTotal(), "SOLES");
+        context.setVariable("precioTotalLetras", precioTotalLetras);
 
         String template = (contrato.getEstadoContrato() == EstadoContrato.SEPARADO) ? "ficha-separacion" : "compromiso-venta";
         String htmlContenido = templateEngine.process(template, context);
