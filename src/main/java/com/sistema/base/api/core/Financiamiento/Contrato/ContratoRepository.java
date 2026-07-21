@@ -24,4 +24,18 @@ public interface ContratoRepository extends JpaRepository<Contrato, Long> {
            "(:manzId IS NULL OR c.lote.manzana.id = :manzId) " +
            "GROUP BY MONTH(c.fechaContrato), CAST(MONTH(c.fechaContrato) AS string)")
     List<MensualChartDTO> findVentasMensuales(Integer anio, Long urbId, Long etapaId, Long manzId);
+
+    @Query("SELECT SUM(c.precioTotal) FROM Contrato c WHERE c.enabled = true AND " +
+            "(:urbId IS NULL OR c.lote.manzana.etapa.urbanizacion.id = :urbId) AND " +
+            "(:etapaId IS NULL OR c.lote.manzana.etapa.id = :etapaId) AND " +
+            "(:manzId IS NULL OR c.lote.manzana.id = :manzId)")
+    Double sumValorVentasReales(Long urbId, Long etapaId, Long manzId);
+
+    @Query("SELECT SUM(c.precioTotal) FROM Contrato c WHERE c.enabled = true AND " +
+            "(:urbId IS NULL OR c.lote.manzana.etapa.urbanizacion.id = :urbId) AND " +
+            "(:etapaId IS NULL OR c.lote.manzana.etapa.id = :etapaId) AND " +
+            "(:manzId IS NULL OR c.lote.manzana.id = :manzId)")
+    Double sumPrecioTotalContratos(Long urbId, Long etapaId, Long manzId);
+
+
 }

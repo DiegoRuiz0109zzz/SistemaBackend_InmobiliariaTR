@@ -14,6 +14,7 @@ import com.sistema.base.api.core.Financiamiento.Pago.DepositoBancario.DepositoBa
 import com.sistema.base.api.core.Financiamiento.Pago.DepositoBancario.DepositoBancarioRepository;
 import com.sistema.base.api.core.Financiamiento.Pago.Serie.Serie;
 import com.sistema.base.api.core.Financiamiento.Pago.Serie.SerieRepository;
+import com.sistema.base.api.core.Financiamiento.Pago.Sunat.SunatService;
 import com.sistema.base.api.core.Usuario.Clientes.Cliente;
 import com.sistema.base.api.service.FileStorageService;
 import com.sistema.base.api.utils.NumeroALetrasConverter;
@@ -35,6 +36,7 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -51,6 +53,7 @@ public class PagoService {
     private final SerieRepository serieRepository;
     private final TemplateEngine templateEngine;
     private final DepositoBancarioRepository depositoBancarioRepository;
+    private final SunatService sunatService;
 
     @Transactional(readOnly = true)
     public List<Pago> listarPorCuota(Long cuotaId) {
@@ -60,7 +63,7 @@ public class PagoService {
     @Transactional(readOnly = true)
     public Page<Pago> listarPagosPaginadosConFiltros(
             int page, int size,
-            String metodoPago,
+            String metodoPago, // Este valor vendrá del frontend como "TRANSFERENCIA", "DEPOSITO", "EFECTIVO", etc.
             TipoComprobante tipoComprobante,
             EstadoPago estado,
             LocalDate fechaDesde,
@@ -71,10 +74,20 @@ public class PagoService {
         Specification<Pago> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            // Filtro 1: Método de Pago (Ej: "EFECTIVO", "TRANSFERENCIA")
+            // ✅ LÓGICA DE FILTRADO DINÁMICO
             if (metodoPago != null && !metodoPago.trim().isEmpty()) {
-                predicates.add(cb.equal(root.get("metodoPago"), metodoPago));
+                if ("TRANSFERENCIA".equalsIgnoreCase(metodoPago)) {
+                    // Agrupamos todos los bancos que son transferencias
+                    predicates.add(root.get("metodoPago").in("BCP", "INTERBANK", "BBVA", "SCOTIABANK", "CAJA PIURA", "BANCO NACION", "MI BANCO"));
+                } else if ("DEPOSITO".equalsIgnoreCase(metodoPago)) {
+                    // Agrupamos todos los depósitos en cuenta
+                    predicates.add(root.get("metodoPago").in("DEP.CTA.BCP", "DEP.CTA.INTERBANK"));
+                } else {
+                    // Para EFECTIVO, YAPE, u otros que no requieren agrupación, buscamos igualdad
+                    predicates.add(cb.equal(root.get("metodoPago"), metodoPago));
+                }
             }
+
             if (tipoComprobante != null) {
                 predicates.add(cb.equal(root.get("tipoComprobante"), tipoComprobante));
             }
@@ -84,7 +97,6 @@ public class PagoService {
             if (fechaDesde != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("fechaPago"), fechaDesde));
             }
-
             if (fechaHasta != null) {
                 predicates.add(cb.lessThanOrEqualTo(root.get("fechaPago"), fechaHasta));
             }
@@ -113,9 +125,6 @@ public class PagoService {
         return String.format("%s-%06d", serieActiva.getSerie(), nuevoCorrelativo);
     }
 
-    // =========================================================================================
-    // ✅ REGISTRAR PAGO DIRECTO
-    // =========================================================================================
     @Transactional
     public List<Pago> registrarPago(Long cuotaId, Double montoAbonado, String metodoPago, String numeroOperacion, String descripcion, MultipartFile voucherFile) {
         Cuota cuotaInicialRequest = cuotaRepository.findById(cuotaId)
@@ -149,6 +158,11 @@ public class PagoService {
 
         List<String> nombresCuotasAfectadas = new ArrayList<>();
 
+        // ✅ NUEVA LÓGICA DE DESCRIPCIÓN UNIFICADA
+        String nombreManzana = (contrato.getLote().getManzana() != null) ? contrato.getLote().getManzana().getNombre() : "";
+        String codigoLote = "MZ " + nombreManzana + "-" + contrato.getLote().getNumero();
+        String fechaFmt = fechaPagoActual.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+
         for (Cuota c : cuotasPendientes) {
             if (montoRestante <= 0) break;
 
@@ -164,15 +178,12 @@ public class PagoService {
                 nombresCuotasAfectadas.add(nombreCuota);
             }
 
+            // ✅ FORMATEAMOS LA DESCRIPCIÓN EXACTA PARA ANTICIPOS
             String descDinamica;
-            if (Double.compare(montoAAplicar, saldoCuota) == 0) {
-                if (c.getMontoPagado() == 0.0) {
-                    descDinamica = "ABONO DE " + nombreCuota;
-                } else {
-                    descDinamica = "SALDO DE " + nombreCuota;
-                }
+            if (c.getNumeroCuota() != null && c.getNumeroCuota() == 0) {
+                descDinamica = "POR EL MONTO DE SEPARACION ANTICIPO RECIBIDO: " + codigoLote + " PROYECTO DENOMINADO LOTIZACION OLMOS,SECTOR OLMOS,DISTRITO DE OLMOS - LAMBAYEQUE. DEL " + fechaFmt + " **PAGO ANTICIPADO**";
             } else {
-                descDinamica = "A CUENTA " + nombreCuota;
+                descDinamica = "ANTICIPO RECIBIDO: CUOTA " + c.getNumeroCuota() + " , " + codigoLote + " PROYECTO DENOMINADO LOTIZACION OLMOS,SECTOR OLMOS,DISTRITO DE OLMOS - LAMBAYEQUE. DEL " + fechaFmt + " **PAGO ANTICIPADO**";
             }
 
             if (descripcion != null && !descripcion.trim().isEmpty()) {
@@ -184,7 +195,7 @@ public class PagoService {
                     .montoAbonado(montoAAplicar)
                     .metodoPago(metodoPago)
                     .numeroOperacion(numeroOperacion)
-                    .descripcion(descDinamica)
+                    .descripcion(descDinamica) // Se guarda la nueva descripción
                     .fotoVoucherUrl(fotoVoucherUrl)
                     .estado(estadoDelPago)
                     .diasRetraso(diasRetraso)
@@ -221,7 +232,6 @@ public class PagoService {
             contratoHistorialService.registrarHito(contrato, "INGRESO_CAJA",
                     "Se recibió S/ " + montoAbonado + " en EFECTIVO físico correspondiente a (" + resumenCuotas + "). Pendiente de depósito bancario bajo el recibo " + numeroComprobanteAgrupado, "Caja", urlVistaPrevia);
         } else {
-            // ✅ SOLO SE REGISTRA EL HITO SI ES UNA NOTA DE ABONO QUE AFECTA A MÁS DE UNA CUOTA
             if (nombresCuotasAfectadas.size() > 1) {
                 String urlVistaPrevia = "/api/pagos/comprobante/" + numeroComprobanteAgrupado + "/pdf";
                 contratoHistorialService.registrarHito(contrato, "NOTA_ABONO_CUOTAS",
@@ -232,9 +242,6 @@ public class PagoService {
         return pagosGenerados;
     }
 
-    // =========================================================================================
-    // ✅ PROCESAR PAGO PENDIENTE
-    // =========================================================================================
     @Transactional
     public List<Pago> procesarPagoPendiente(Long pagoId, String metodoPago, String numeroOperacion, String descripcion, MultipartFile voucherFile) {
         Pago pagoOriginal = pagoRepository.findById(pagoId).orElseThrow(() -> new RuntimeException("Pago no encontrado."));
@@ -270,6 +277,11 @@ public class PagoService {
 
         List<String> nombresCuotasAfectadas = new ArrayList<>();
 
+        // ✅ NUEVA LÓGICA DE DESCRIPCIÓN UNIFICADA
+        String nombreManzana = (contrato.getLote().getManzana() != null) ? contrato.getLote().getManzana().getNombre() : "";
+        String codigoLote = "MZ " + nombreManzana + "-" + contrato.getLote().getNumero();
+        String fechaFmt = fechaDelPago.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+
         for (Cuota c : cuotasPendientes) {
             if (montoRestante <= 0) break;
 
@@ -300,15 +312,12 @@ public class PagoService {
                         .build();
             }
 
+            // ✅ FORMATEAMOS LA DESCRIPCIÓN EXACTA PARA ANTICIPOS
             String descDinamica;
-            if (Double.compare(montoAAplicar, saldoCuota) == 0) {
-                if (c.getMontoPagado() == 0.0) {
-                    descDinamica = "ABONO DE " + nombreCuota;
-                } else {
-                    descDinamica = "SALDO DE " + nombreCuota;
-                }
+            if (c.getNumeroCuota() != null && c.getNumeroCuota() == 0) {
+                descDinamica = "POR EL MONTO DE SEPARACION ANTICIPO RECIBIDO: " + codigoLote + " PROYECTO DENOMINADO LOTIZACION OLMOS,SECTOR OLMOS,DISTRITO DE OLMOS - LAMBAYEQUE. DEL " + fechaFmt + " **PAGO ANTICIPADO**";
             } else {
-                descDinamica = "A CUENTA " + nombreCuota;
+                descDinamica = "ANTICIPO RECIBIDO: CUOTA " + c.getNumeroCuota() + " , " + codigoLote + " PROYECTO DENOMINADO LOTIZACION OLMOS,SECTOR OLMOS,DISTRITO DE OLMOS - LAMBAYEQUE. DEL " + fechaFmt + " **PAGO ANTICIPADO**";
             }
 
             if (descripcion != null && !descripcion.trim().isEmpty()) {
@@ -317,7 +326,7 @@ public class PagoService {
 
             pagoActual.setMetodoPago(metodoPago);
             pagoActual.setNumeroOperacion(numeroOperacion);
-            pagoActual.setDescripcion(descDinamica);
+            pagoActual.setDescripcion(descDinamica); // Se guarda la nueva descripción
             pagoActual.setFotoVoucherUrl(fotoVoucherUrl);
             pagoActual.setEstado(estadoDelPago);
             pagoActual.setDiasRetraso(diasRetraso);
@@ -356,7 +365,6 @@ public class PagoService {
             contratoHistorialService.registrarHito(contrato, "INGRESO_CAJA",
                     "Se procesó un ingreso de S/ " + montoTotalAbonado + " en EFECTIVO físico correspondiente a (" + resumenCuotas + "). Pendiente de depósito en caja. Recibo: " + numeroComprobanteAgrupado, "Caja", urlVistaPrevia);
         } else {
-            // ✅ SOLO SE REGISTRA EL HITO SI ES UNA NOTA DE ABONO QUE AFECTA A MÁS DE UNA CUOTA
             if (nombresCuotasAfectadas.size() > 1) {
                 String urlVistaPrevia = "/api/pagos/comprobante/" + numeroComprobanteAgrupado + "/pdf";
                 contratoHistorialService.registrarHito(contrato, "NOTA_ABONO_CUOTAS",
@@ -405,17 +413,6 @@ public class PagoService {
     }
 
     @Transactional(readOnly = true)
-    public byte[] generarNotaVentaPdf(Long pagoId) {
-        Pago pago = pagoRepository.findById(pagoId).orElseThrow(() -> new RuntimeException("Pago no encontrado"));
-
-        if (pago.getNumeroComprobante() == null || pago.getNumeroComprobante().isEmpty()) {
-            throw new RuntimeException("El pago no tiene un comprobante asignado.");
-        }
-
-        return generarNotaAbonoMultiPdf(pago.getNumeroComprobante());
-    }
-
-    @Transactional(readOnly = true)
     public byte[] generarNotaAbonoMultiPdf(String numeroComprobante) {
         List<Pago> pagos = pagoRepository.findByNumeroComprobante(numeroComprobante);
         if (pagos.isEmpty()) throw new RuntimeException("Comprobante no encontrado.");
@@ -435,6 +432,28 @@ public class PagoService {
         context.setVariable("imgLogo", getImagenBase64("logo_terranort.png"));
 
         return compilarPdf("nota-abono", context);
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] generarComprobanteElectronicoPdf(String numeroComprobante) {
+        List<Pago> pagos = pagoRepository.findByNumeroComprobante(numeroComprobante);
+        if (pagos.isEmpty()) throw new RuntimeException("Comprobante no encontrado.");
+
+        Contrato contrato = pagos.get(0).getCuota().getContrato();
+        Empresa empresa = empresaRepository.findById(1L).orElse(null);
+        double totalAbonado = pagos.stream().mapToDouble(Pago::getMontoAbonado).sum();
+
+        Context context = new Context();
+        context.setVariable("pagos", pagos);
+        context.setVariable("pagoBase", pagos.get(0)); // Contiene el tipo (FACTURA/BOLETA) y número (F001-...)
+        context.setVariable("totalAbonado", totalAbonado);
+        context.setVariable("cliente", contrato.getCliente());
+        context.setVariable("contrato", contrato);
+        context.setVariable("montoEnLetras", NumeroALetrasConverter.convertir(totalAbonado, "SOLES"));
+        context.setVariable("empresa", empresa);
+        context.setVariable("imgLogo", getImagenBase64("logo_terranort.png"));
+
+        return compilarPdf("comprobante-electronico", context);
     }
 
     @Transactional(readOnly = true)
@@ -541,10 +560,8 @@ public class PagoService {
             String cleanName = org.springframework.util.StringUtils.cleanPath(archivoFirmado.getOriginalFilename()).replaceAll("[\\s+]", "_");
             String customName = "FIRMADO_" + numeroRecibo + "_" + cleanName;
 
-            // Esta es la ruta física real donde se guardó el PDF escaneado/foto
             String savedPath = "uploads/" + fileStorageService.storeFileWithCustomName(archivoFirmado, "recibos_firmados", customName);
 
-            // ✅ CORRECCIÓN: Pasamos 'savedPath' en lugar de 'null' para que el frontend pueda visualizarlo
             contratoHistorialService.registrarHito(
                     contrato,
                     "RECIBO_FIRMADO",
@@ -573,4 +590,96 @@ public class PagoService {
 
         return reporte;
     }
+
+    @Transactional
+    public List<Pago> registrarPagoYEmitirSunat(Long cuotaId, Double montoAbonado, String metodoPago,
+                                                String numeroOperacion, // ✅ SE MANTIENE EL NÚMERO DE OPERACIÓN
+                                                String descripcionPersonalizada,
+                                                TipoComprobante tipoComprobante, String prefijoSerie, String tipoIgv, String tipoDoc,
+                                                String ruc, String razonSocial, String direccionFactura) {
+
+        Cuota cuotaInicialRequest = cuotaRepository.findById(cuotaId).orElseThrow(() -> new RuntimeException("Cuota no encontrada"));
+        Contrato contrato = cuotaInicialRequest.getContrato();
+        List<Cuota> cuotasPendientes = cuotaRepository.findByContratoIdAndEnabledTrueOrderByNumeroCuotaAsc(contrato.getId())
+                .stream().filter(c -> c.getMontoPagado() < c.getMontoTotal()).collect(Collectors.toList());
+
+        double deudaTotal = cuotasPendientes.stream().mapToDouble(c -> c.getMontoTotal() - c.getMontoPagado()).sum();
+        if (montoAbonado > deudaTotal) throw new RuntimeException("El monto a abonar supera la deuda total.");
+
+        String igvDefinitivo = (tipoIgv != null && !tipoIgv.trim().isEmpty()) ? tipoIgv : "20";
+        Serie serieActiva = serieRepository.findActiveSerieForUpdate(tipoComprobante)
+                .orElseThrow(() -> new RuntimeException("No hay serie activa para " + tipoComprobante.name()));
+
+        int nuevoCorrelativo = serieActiva.getUltimoCorrelativo() + 1;
+        serieActiva.setUltimoCorrelativo(nuevoCorrelativo);
+        serieRepository.save(serieActiva);
+
+        String numeroComprobanteAgrupado = prefijoSerie + "-" + String.format("%06d", nuevoCorrelativo);
+
+        Double montoRestante = montoAbonado;
+        List<Pago> pagosGenerados = new ArrayList<>();
+        LocalDate fechaPagoActual = LocalDate.now();
+        String fechaFmt = fechaPagoActual.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+
+        for (Cuota c : cuotasPendientes) {
+            if (montoRestante <= 0) break;
+
+            Double saldoCuota = c.getMontoTotal() - c.getMontoPagado();
+            Double montoAAplicar = Math.min(montoRestante, saldoCuota);
+
+            Pago pago = Pago.builder()
+                    .cuota(c).montoAbonado(montoAAplicar).metodoPago(metodoPago)
+                    .numeroOperacion(numeroOperacion) // ✅ SE GUARDA EN LA BD
+                    .estado(EstadoPago.PROCESADO).tipoComprobante(tipoComprobante)
+                    .numeroComprobante(numeroComprobanteAgrupado).fechaRegistro(LocalDate.now()).fechaPago(fechaPagoActual).build();
+
+            // ✅ FORMATEAMOS LA DESCRIPCIÓN EXACTA PARA ANTICIPOS (IGUAL QUE EN LOS OTROS MÉTODOS)
+            String nombreManzana = (c.getContrato().getLote().getManzana() != null) ? c.getContrato().getLote().getManzana().getNombre() : "";
+            String codigoLote = "MZ " + nombreManzana + "-" + c.getContrato().getLote().getNumero();
+            String descDinamica;
+
+            if (c.getNumeroCuota() == 0) {
+                descDinamica = "POR EL MONTO DE SEPARACION ANTICIPO RECIBIDO: " + codigoLote + " PROYECTO DENOMINADO LOTIZACION OLMOS,SECTOR OLMOS,DISTRITO DE OLMOS - LAMBAYEQUE. DEL " + fechaFmt + " **PAGO ANTICIPADO**";
+            } else {
+                descDinamica = "ANTICIPO RECIBIDO: CUOTA " + c.getNumeroCuota() + " , " + codigoLote + " PROYECTO DENOMINADO LOTIZACION OLMOS,SECTOR OLMOS,DISTRITO DE OLMOS - LAMBAYEQUE. DEL " + fechaFmt + " **PAGO ANTICIPADO**";
+            }
+
+            if (descripcionPersonalizada != null && !descripcionPersonalizada.trim().isEmpty()) {
+                descDinamica += " - " + descripcionPersonalizada;
+            }
+
+            pago.setDescripcion(descDinamica); // Se guarda la descripción final
+
+            c.setMontoPagado(c.getMontoPagado() + montoAAplicar);
+            c.setEstado(c.getMontoPagado() >= c.getMontoTotal() ? EstadoCuota.PAGADO_TOTAL : EstadoCuota.PAGADO_PARCIAL);
+            cuotaRepository.save(c);
+            pagosGenerados.add(pagoRepository.save(pago));
+            montoRestante -= montoAAplicar;
+        }
+
+        double totalPagadoHastaHoy = cuotaRepository.findByContratoIdAndEnabledTrueOrderByNumeroCuotaAsc(contrato.getId())
+                .stream().mapToDouble(Cuota::getMontoPagado).sum();
+
+        if (totalPagadoHastaHoy >= 2500.0) {
+            comisionService.evaluarYGenerarComisiones(contrato);
+        }
+
+        Empresa empresa = empresaRepository.findById(1L).orElseThrow(() -> new RuntimeException("Empresa no configurada"));
+
+        Map<String, Object> res = sunatService.emitirComprobanteMultiple(pagosGenerados, tipoComprobante.name(), prefijoSerie, String.valueOf(nuevoCorrelativo), igvDefinitivo, tipoDoc, ruc, razonSocial, direccionFactura, empresa);
+
+        if (res != null && (Boolean) res.getOrDefault("success", false)) {
+            Map<String, Object> data = (Map<String, Object>) res.get("data");
+            Map<String, Object> links = (Map<String, Object>) res.get("links");
+            for (Pago p : pagosGenerados) {
+                p.setEnlacePdfSunat((String) links.get("pdf"));
+                p.setEnlaceXmlSunat((String) links.get("xml"));
+                p.setEstadoSunat("ACEPTADO");
+                pagoRepository.save(p);
+            }
+            return pagosGenerados;
+        }
+        throw new RuntimeException("Error en SUNAT: " + res.get("message"));
+    }
+
 }

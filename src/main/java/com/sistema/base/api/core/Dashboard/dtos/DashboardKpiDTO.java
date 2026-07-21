@@ -14,19 +14,23 @@ public class DashboardKpiDTO {
     private Long totalLotes;
     private Long lotesVendidos;
     private Long lotesDisponibles;
-    
+
     // Valor Lotes Globales
     private Double valorTotal;
     private Double valorVendido;
     private Double valorDisponible;
     private Double valorPotencial;
-    
+
     // Porcentajes Lotes
     private Double porcentajeVentasCantidad;
     private Double porcentajeVentasMonto;
-    
+
     // Financiero
     private Double totalCobrado;
     private Double totalPorCobrar;
     private Double porcentajeRecaudacion;
+
+    // ✅ NUEVOS CAMPOS AÑADIDOS
+    private Double totalContratado;
+    private Double totalRecaudado;
 }

@@ -1,5 +1,6 @@
 package com.sistema.base.api.core.Financiamiento.Pago;
 
+import com.sistema.base.api.core.Financiamiento.Pago.Sunat.PagoSunatRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -85,25 +86,6 @@ public class PagoController {
         return ResponseEntity.ok("Sincronización y recálculo de días de retraso completado para el contrato N°: " + contratoId);
     }
 
-    // =========================================================================
-    // ✅ ENDPOINTS PARA DESCARGAR DOCUMENTOS PDF
-    // =========================================================================
-
-    // 1. ENDPOINT DE COMPATIBILIDAD (Por ID - Deriva a Nota de Abono)
-    @GetMapping("/{id}/nota-venta")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<byte[]> descargarNotaVenta(@PathVariable Long id) {
-        byte[] pdfBytes = pagoService.generarNotaVentaPdf(id);
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_PDF);
-        headers.setContentDispositionFormData("inline", "Nota_Abono_" + id + ".pdf");
-        headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
-
-        return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
-    }
-
-    // 2. NUEVO ENDPOINT: Nota de Abono Oficial (Por Comprobante agrupado)
     @GetMapping("/comprobante/{numeroComprobante}/pdf")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<byte[]> descargarNotaAbonoPdf(@PathVariable String numeroComprobante) {
@@ -117,7 +99,6 @@ public class PagoController {
         return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
     }
 
-    // 3. NUEVO ENDPOINT: Recibo de Ingreso Provisional de Caja
     @GetMapping("/recibo/{numeroComprobante}/pdf")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<byte[]> descargarReciboIngresoPdf(@PathVariable String numeroComprobante) {
@@ -131,9 +112,19 @@ public class PagoController {
         return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
     }
 
-    // =========================================================================
-    // ✅ NUEVO ENDPOINT: Conciliación de Caja Múltiple (Fase 2)
-    // =========================================================================
+    @GetMapping("/comprobante-sunat/{numeroComprobante}/pdf")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<byte[]> descargarComprobanteSunatPdf(@PathVariable String numeroComprobante) {
+        byte[] pdfBytes = pagoService.generarComprobanteElectronicoPdf(numeroComprobante);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_PDF);
+        headers.setContentDispositionFormData("inline", "Comprobante_" + numeroComprobante + ".pdf");
+        headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
+
+        return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
+    }
+
     @PostMapping(value = "/conciliar/{numeroRecibo}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAuthority('PROCESAR_PAGO')")
     public ResponseEntity<List<Pago>> conciliarCaja(
@@ -162,4 +153,28 @@ public class PagoController {
     public ResponseEntity<java.util.Map<String, Object>> obtenerReporteCaja() {
         return ResponseEntity.ok(pagoService.obtenerReporteCajaFisica());
     }
+
+
+    @PostMapping("/facturacion/registrar-pago")
+    @PreAuthorize("hasAuthority('CREAR_PAGO')")
+    public ResponseEntity<List<Pago>> registrarPagoYEmitirSunatJson(@RequestBody PagoSunatRequest request) {
+
+        List<Pago> pagosRealizados = pagoService.registrarPagoYEmitirSunat(
+                request.getCuotaId(),
+                request.getMontoAbonado(),
+                request.getMetodoPago(),
+                request.getNumeroOperacion(), // ✅ SE AGREGA EL NÚMERO DE OPERACIÓN AQUÍ
+                request.getDescripcion(),
+                request.getTipoComprobante(),
+                request.getSerie(),
+                request.getTipoIgv(),
+                request.getTipoDoc(),
+                request.getRuc(),
+                request.getRazonSocial(),
+                request.getDireccionFactura()
+        );
+
+        return ResponseEntity.ok(pagosRealizados);
+    }
+
 }
