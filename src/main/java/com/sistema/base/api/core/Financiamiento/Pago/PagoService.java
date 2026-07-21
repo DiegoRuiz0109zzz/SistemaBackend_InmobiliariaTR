@@ -593,7 +593,7 @@ public class PagoService {
 
     @Transactional
     public List<Pago> registrarPagoYEmitirSunat(Long cuotaId, Double montoAbonado, String metodoPago,
-                                                String numeroOperacion, // ✅ SE MANTIENE EL NÚMERO DE OPERACIÓN
+                                                String numeroOperacion,
                                                 String descripcionPersonalizada,
                                                 TipoComprobante tipoComprobante, String prefijoSerie, String tipoIgv, String tipoDoc,
                                                 String ruc, String razonSocial, String direccionFactura) {
@@ -619,7 +619,6 @@ public class PagoService {
         Double montoRestante = montoAbonado;
         List<Pago> pagosGenerados = new ArrayList<>();
         LocalDate fechaPagoActual = LocalDate.now();
-        String fechaFmt = fechaPagoActual.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"));
 
         for (Cuota c : cuotasPendientes) {
             if (montoRestante <= 0) break;
@@ -629,26 +628,27 @@ public class PagoService {
 
             Pago pago = Pago.builder()
                     .cuota(c).montoAbonado(montoAAplicar).metodoPago(metodoPago)
-                    .numeroOperacion(numeroOperacion) // ✅ SE GUARDA EN LA BD
+                    .numeroOperacion(numeroOperacion)
                     .estado(EstadoPago.PROCESADO).tipoComprobante(tipoComprobante)
                     .numeroComprobante(numeroComprobanteAgrupado).fechaRegistro(LocalDate.now()).fechaPago(fechaPagoActual).build();
 
-            // ✅ FORMATEAMOS LA DESCRIPCIÓN EXACTA PARA ANTICIPOS (IGUAL QUE EN LOS OTROS MÉTODOS)
+            // ✅ FORMATEAMOS LA DESCRIPCIÓN EXACTAMENTE COMO EL XML DE MUESTRA
             String nombreManzana = (c.getContrato().getLote().getManzana() != null) ? c.getContrato().getLote().getManzana().getNombre() : "";
             String codigoLote = "MZ " + nombreManzana + "-" + c.getContrato().getLote().getNumero();
             String descDinamica;
 
             if (c.getNumeroCuota() == 0) {
-                descDinamica = "POR EL MONTO DE SEPARACION ANTICIPO RECIBIDO: " + codigoLote + " PROYECTO DENOMINADO LOTIZACION OLMOS,SECTOR OLMOS,DISTRITO DE OLMOS - LAMBAYEQUE. DEL " + fechaFmt + " **PAGO ANTICIPADO**";
+                descDinamica = "A CUENTA INICIAL. " + codigoLote + ". PROYECTO DENOMINADO LOTIZACION OLMOS,SECTOR OLMOS,DISTRITO OLMOS ,LAMBAYEQUE.";
             } else {
-                descDinamica = "ANTICIPO RECIBIDO: CUOTA " + c.getNumeroCuota() + " , " + codigoLote + " PROYECTO DENOMINADO LOTIZACION OLMOS,SECTOR OLMOS,DISTRITO DE OLMOS - LAMBAYEQUE. DEL " + fechaFmt + " **PAGO ANTICIPADO**";
+                descDinamica = "A CUENTA CUOTA " + c.getNumeroCuota() + ". " + codigoLote + ". PROYECTO DENOMINADO LOTIZACION OLMOS,SECTOR OLMOS,DISTRITO OLMOS ,LAMBAYEQUE.";
             }
 
+            // Si el usuario escribió algo extra en el formulario, se añade al final
             if (descripcionPersonalizada != null && !descripcionPersonalizada.trim().isEmpty()) {
                 descDinamica += " - " + descripcionPersonalizada;
             }
 
-            pago.setDescripcion(descDinamica); // Se guarda la descripción final
+            pago.setDescripcion(descDinamica);
 
             c.setMontoPagado(c.getMontoPagado() + montoAAplicar);
             c.setEstado(c.getMontoPagado() >= c.getMontoTotal() ? EstadoCuota.PAGADO_TOTAL : EstadoCuota.PAGADO_PARCIAL);
@@ -680,6 +680,81 @@ public class PagoService {
             return pagosGenerados;
         }
         throw new RuntimeException("Error en SUNAT: " + res.get("message"));
+    }
+
+    @Transactional
+    public List<Pago> convertirNotaAbonoABoleta(String numeroNotaAbono, String prefijoSerieBoleta, String tipoIgv, String ruc, String razonSocial, String direccionFactura) {
+        // 1. Buscamos los pagos asociados a la Nota de Abono existente
+        List<Pago> pagosNota = pagoRepository.findByNumeroComprobante(numeroNotaAbono);
+        if (pagosNota.isEmpty()) {
+            throw new RuntimeException("No se encontró la Nota de Abono con el número: " + numeroNotaAbono);
+        }
+
+        // Validamos que el documento origen sea realmente una Nota de Abono
+        if (pagosNota.get(0).getTipoComprobante() != TipoComprobante.NOTA_ABONO) {
+            throw new RuntimeException("El documento a convertir no es una Nota de Abono.");
+        }
+
+        Contrato contrato = pagosNota.get(0).getCuota().getContrato();
+        Empresa empresa = empresaRepository.findById(1L).orElseThrow(() -> new RuntimeException("Empresa no configurada"));
+
+        // 2. Obtenemos la nueva serie activa para BOLETA
+        Serie serieActiva = serieRepository.findActiveSerieForUpdate(TipoComprobante.BOLETA)
+                .orElseThrow(() -> new RuntimeException("No se encontró una serie activa para BOLETA"));
+
+        int nuevoCorrelativo = serieActiva.getUltimoCorrelativo() + 1;
+        serieActiva.setUltimoCorrelativo(nuevoCorrelativo);
+        serieRepository.save(serieActiva);
+
+        String nuevoNumeroBoleta = prefijoSerieBoleta + "-" + String.format("%06d", nuevoCorrelativo);
+        String igvDefinitivo = (tipoIgv != null && !tipoIgv.trim().isEmpty()) ? tipoIgv : "20";
+
+        List<Pago> pagosActualizados = new ArrayList<>();
+
+        // 3. Actualizamos los registros de pago para que apunten a la nueva Boleta
+        for (Pago pago : pagosNota) {
+            pago.setTipoComprobante(TipoComprobante.BOLETA);
+            pago.setNumeroComprobante(nuevoNumeroBoleta);
+            pagosActualizados.add(pagoRepository.save(pago));
+        }
+
+        // 4. Emitimos el comprobante electrónico a través de la API de SUNAT
+        Map<String, Object> res = sunatService.emitirComprobanteMultiple(
+                pagosActualizados,
+                TipoComprobante.BOLETA.name(),
+                prefijoSerieBoleta,
+                String.valueOf(nuevoCorrelativo),
+                igvDefinitivo,
+                "1", // 1 para Boleta de Venta
+                ruc,
+                razonSocial,
+                direccionFactura,
+                empresa
+        );
+
+        // 5. Validamos la respuesta de SUNAT y guardamos los enlaces devueltos
+        if (res != null && (Boolean) res.getOrDefault("success", false)) {
+            Map<String, Object> links = (Map<String, Object>) res.get("links");
+            for (Pago p : pagosActualizados) {
+                p.setEnlacePdfSunat((String) links.get("pdf"));
+                p.setEnlaceXmlSunat((String) links.get("xml"));
+                p.setEstadoSunat("ACEPTADO");
+                pagoRepository.save(p);
+            }
+
+            // Registramos el hito en el historial del contrato
+            contratoHistorialService.registrarHito(
+                    contrato,
+                    "NOTA_ABONO_A_BOLETA",
+                    "Se convirtió la Nota de Abono " + numeroNotaAbono + " a la Boleta Electrónica " + nuevoNumeroBoleta,
+                    "SUNAT",
+                    (String) links.get("pdf")
+            );
+
+            return pagosActualizados;
+        }
+
+        throw new RuntimeException("Error al emitir la boleta en SUNAT: " + res.get("message"));
     }
 
 }

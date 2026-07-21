@@ -244,7 +244,7 @@
     <strong class="underline">TERCERO:</strong> El precio de venta pactado de común acuerdo es de S/.
     <span th:if="${contrato.saldoFinanciar != null and contrato.montoInicial != null}" class="highlight" th:text="${#numbers.formatDecimal(contrato.saldoFinanciar + contrato.montoInicial, 1, 'COMMA', 2, 'POINT')}"></span>
     <span th:unless="${contrato.saldoFinanciar != null and contrato.montoInicial != null}" class="highlight">_________</span>
-    (<span class="placeholder">[PRECIO TOTAL EN LETRAS]</span>) por el lote de terreno asignado como <strong>MZ "<span class="highlight uppercase-text" th:text="${contrato.lote.manzana.nombre}"></span>" LOTE N° <span class="highlight" th:text="${contrato.lote.numero}"></span></strong>, importe que el <strong>COMPRADOR(A)</strong> pagará al <strong>PROPIETARIO</strong> de la siguiente manera: Pago inicial de <strong>S/.</strong>
+    (<span class="highlight" th:text="${precioTotalLetras}"></span>) por el lote de terreno asignado como <strong>MZ "<span class="highlight uppercase-text" th:text="${contrato.lote.manzana.nombre}"></span>" LOTE N° <span class="highlight" th:text="${contrato.lote.numero}"></span></strong>, importe que el <strong>COMPRADOR(A)</strong> pagará al <strong>PROPIETARIO</strong> de la siguiente manera: Pago inicial de <strong>S/.</strong>
 
     <span th:if="${contrato.montoInicial != null}" class="highlight" th:text="${#numbers.formatDecimal(contrato.montoInicial, 1, 'COMMA', 2, 'POINT')}"></span>
     <span th:unless="${contrato.montoInicial != null}" class="highlight">_________</span>

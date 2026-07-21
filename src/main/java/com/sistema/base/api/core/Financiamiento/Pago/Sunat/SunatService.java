@@ -44,7 +44,6 @@ public class SunatService {
 
     public Map<String, Object> emitirComprobanteMultiple(List<Pago> pagos, String tipoComprobanteId, String serie, String numeroCorrelativo, String tipoIgv, String tipoDoc, String ruc, String razonSocial, String direccionFactura, Empresa empresa) {
 
-        // Tomamos el contrato del primer pago (todos pertenecen al mismo contrato)
         Contrato contratoBase = pagos.get(0).getCuota().getContrato();
         Cliente cliente = contratoBase.getCliente();
 
@@ -64,26 +63,25 @@ public class SunatService {
         payload.put("fecha_de_emision", java.time.LocalDate.now().toString());
         payload.put("hora_de_emision", java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")));
         payload.put("codigo_tipo_moneda", "PEN");
-
-        // ✅ CORREGIDO: 0104 es el código obligatorio de SUNAT para Anticipos
-        payload.put("codigo_tipo_operacion", "0101");
-
+        payload.put("codigo_tipo_operacion", "0101"); // Operación regular (Venta interna)
         payload.put("fecha_de_vencimiento", java.time.LocalDate.now().toString());
         payload.put("forma_de_pago", "Contado");
 
-        // ✅ CORREGIDO: Limpiamos la palabra "TRANSFERENCIA " para que solo viaje "BCP 123456"
-        String obsMetodo = pagos.get(0).getMetodoPago() != null ? pagos.get(0).getMetodoPago().replace("TRANSFERENCIA ", "").trim() : "";
-        String obsOperacion = pagos.get(0).getNumeroOperacion() != null ? pagos.get(0).getNumeroOperacion() : "";
-        String observacionSunat = (obsMetodo + " " + obsOperacion).trim();
+        // ✅ CORRECCIÓN DE LA OBSERVACIÓN (MÉTODO + NÚMERO DE OPERACIÓN)
+        String metodoStr = pagos.get(0).getMetodoPago() != null ? pagos.get(0).getMetodoPago().trim() : "";
+        String operacionStr = pagos.get(0).getNumeroOperacion() != null ? pagos.get(0).getNumeroOperacion().trim() : "";
+
+        // Unimos limpiamente ambos valores. Si ambos existen, se separan por un espacio (Ej: "BCP 123456")
+        String observacionSunat = (metodoStr + " " + operacionStr).trim();
 
         if (!observacionSunat.isEmpty()) {
-            payload.put("observaciones", observacionSunat);
+            payload.put("observaciones", observacionSunat); // El facturador lo usará para el PDF
         }
 
         // --- Datos del Emisor (Tu Empresa) ---
         if (empresa != null) {
             Map<String, Object> emisor = new HashMap<>();
-            emisor.put("codigo_tipo_documento_identidad", "6"); // 6 = RUC
+            emisor.put("codigo_tipo_documento_identidad", "6");
             emisor.put("numero_documento", empresa.getRuc());
             emisor.put("apellidos_y_nombres_o_razon_social", empresa.getRazonSocial());
             emisor.put("nombre_comercial", empresa.getRazonSocial());
@@ -129,8 +127,7 @@ public class SunatService {
             sumaTotalValor += valorUnitarioItem;
             sumaTotalIgv += igvItem;
 
-            // ✅ CORREGIDO: Se quita la concatenación repetida de "codigoLote"
-            String descripcionFila = pago.getDescripcion();
+            String descripcionFila = pago.getDescripcion(); // Trae la descripción correcta desde registrarPagoYEmitirSunat
 
             Map<String, Object> item = new HashMap<>();
             item.put("codigo_interno", codigoLote);
