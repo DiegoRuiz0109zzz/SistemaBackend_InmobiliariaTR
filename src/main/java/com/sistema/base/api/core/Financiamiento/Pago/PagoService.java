@@ -63,7 +63,7 @@ public class PagoService {
     @Transactional(readOnly = true)
     public Page<Pago> listarPagosPaginadosConFiltros(
             int page, int size,
-            String metodoPago,
+            String metodoPago, // Este valor vendrá del frontend como "TRANSFERENCIA", "DEPOSITO", "EFECTIVO", etc.
             TipoComprobante tipoComprobante,
             EstadoPago estado,
             LocalDate fechaDesde,
@@ -74,9 +74,20 @@ public class PagoService {
         Specification<Pago> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
+            // ✅ LÓGICA DE FILTRADO DINÁMICO
             if (metodoPago != null && !metodoPago.trim().isEmpty()) {
-                predicates.add(cb.equal(root.get("metodoPago"), metodoPago));
+                if ("TRANSFERENCIA".equalsIgnoreCase(metodoPago)) {
+                    // Agrupamos todos los bancos que son transferencias
+                    predicates.add(root.get("metodoPago").in("BCP", "INTERBANK", "BBVA", "SCOTIABANK", "CAJA PIURA", "BANCO NACION", "MI BANCO"));
+                } else if ("DEPOSITO".equalsIgnoreCase(metodoPago)) {
+                    // Agrupamos todos los depósitos en cuenta
+                    predicates.add(root.get("metodoPago").in("DEP.CTA.BCP", "DEP.CTA.INTERBANK"));
+                } else {
+                    // Para EFECTIVO, YAPE, u otros que no requieren agrupación, buscamos igualdad
+                    predicates.add(cb.equal(root.get("metodoPago"), metodoPago));
+                }
             }
+
             if (tipoComprobante != null) {
                 predicates.add(cb.equal(root.get("tipoComprobante"), tipoComprobante));
             }
