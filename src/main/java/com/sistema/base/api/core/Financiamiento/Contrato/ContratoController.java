@@ -111,6 +111,19 @@ public class ContratoController {
         }
     }
 
+    @PostMapping("/{id}/liberar")
+    @PreAuthorize("hasAuthority('EDITAR_CONTRATO')")
+    public ResponseEntity<?> liberarLote(
+            @PathVariable Long id,
+            @RequestParam(value = "observacion", required = false) String observacion) {
+        try {
+            Contrato contratoActualizado = contratoService.liberarLote(id, observacion);
+            return ResponseEntity.ok(contratoActualizado);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @GetMapping("/{id}/acta-traspaso-titular")
     @PreAuthorize("hasAuthority('EDITAR_CONTRATO')")
     public ResponseEntity<byte[]> descargarActaTraspasoTitular(

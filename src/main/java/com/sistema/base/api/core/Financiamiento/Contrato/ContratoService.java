@@ -205,11 +205,9 @@ public class ContratoService {
 
         Double abonoInicialPrometido = (req.getAbonoInicialReal() != null) ? req.getAbonoInicialReal() : 0.0;
 
-        boolean pagoInicialCompleto = abonoInicialPrometido >= req.getMontoInicialAcordado();
-        boolean tieneCronograma = cantidadCuotasFijas > 0;
-
-        EstadoContrato estadoContratoReal = (pagoInicialCompleto && tieneCronograma) ? EstadoContrato.ACTIVO : EstadoContrato.SEPARADO;
-        EstadoLote estadoLoteReal = (pagoInicialCompleto && tieneCronograma) ? EstadoLote.VENDIDO : EstadoLote.RESERVADO;
+        // ✅ MODIFICACIÓN 1: Forzamos a que todo nuevo registro nazca estrictamente como SEPARADO y el lote como RESERVADO.
+        EstadoContrato estadoContratoReal = EstadoContrato.SEPARADO;
+        EstadoLote estadoLoteReal = EstadoLote.RESERVADO;
 
         lote.setEstadoVenta(estadoLoteReal);
         loteRepository.save(lote);
@@ -217,7 +215,8 @@ public class ContratoService {
         Contrato contrato = Contrato.builder()
                 .lote(lote).cliente(cliente).coComprador(coComprador).vendedor(vendedor).cotizacionOrigen(cotizacion)
                 .precioTotal(req.getPrecioTotal()).montoInicial(req.getMontoInicialAcordado())
-                .montoAbonadoIncial(abonoInicialPrometido).saldoFinanciar(saldoFinanciar).cantidadCuotas(req.getCantidadCuotas())
+                .montoAbonadoIncial(abonoInicialPrometido).saldoFinanciar(saldoFinanciar)
+                .cantidadCuotas(cantidadCuotasFijas) // ✅ MODIFICACIÓN 2: Usamos la variable segura (0 en lugar de null)
                 .descripcion(descBuilder.toString()).tipoInicial(req.getTipoInicial())
                 .cuotasFlexibles(req.getCuotasFlexibles() != null ? req.getCuotasFlexibles() : false)
                 .fechaInicioCronograma(req.getFechaInicioPago())
@@ -240,6 +239,8 @@ public class ContratoService {
             pagoRepository.save(pagoPendiente);
         }
 
+        // NOTA: Como estadoContratoReal es siempre SEPARADO, este bloque ya no se ejecutará al crear el contrato.
+        // El cronograma se generará de manera segura recién cuando se llame a actualizarContrato (y pase a ACTIVO).
         if (estadoContratoReal == EstadoContrato.ACTIVO && saldoFinanciar > 0 && cantidadCuotasFijas > 0) {
             SimulacionRequest sim = new SimulacionRequest();
             sim.setPrecioTotal(req.getPrecioTotal());
@@ -248,7 +249,7 @@ public class ContratoService {
             sim.setFechaInicioPago(req.getFechaInicioPago());
             sim.setCuotasEspeciales(req.getCuotasEspeciales());
             sim.setMontoCuotaEspecial(req.getMontoCuotaEspecial());
-            sim.setBloquesFlexibles(req.getBloquesFlexibles()); // ✅ Inyectamos bloques flexibles
+            sim.setBloquesFlexibles(req.getBloquesFlexibles());
 
             List<CuotaPreview> proyeccion = simularCronograma(sim).getCronograma();
             List<Cuota> cuotasAGuardar = new ArrayList<>();
@@ -336,20 +337,24 @@ public class ContratoService {
     public String obtenerAlertaSeparacionVencida(Long contratoId) {
         Contrato contrato = obtenerPorId(contratoId);
 
-        if (contrato.getEstadoContrato() != EstadoContrato.SEPARADO) {
+        // 1. Verificamos que esté SEPARADO y que la fecha de inicio de cronograma sea null
+        if (contrato.getEstadoContrato() != EstadoContrato.SEPARADO || contrato.getFechaInicioCronograma() != null) {
             return null;
         }
 
+        // 2. Obtenemos la Cuota 0 (que guarda la fecha límite de vigencia de la separación)
         Cuota cuota0 = cuotaRepository.findByContratoIdAndEnabledTrueOrderByNumeroCuotaAsc(contrato.getId())
                 .stream().filter(c -> c.getNumeroCuota() == 0).findFirst().orElse(null);
 
+        // 3. Verificamos estrictamente si la fecha ya pasó
         if (cuota0 != null && cuota0.getFechaVencimiento() != null) {
             LocalDate hoy = LocalDate.now();
-            if (hoy.isAfter(cuota0.getFechaVencimiento()) && cuota0.getEstado() != EstadoCuota.PAGADO_TOTAL) {
+            if (hoy.isAfter(cuota0.getFechaVencimiento())) {
                 long diasAtraso = ChronoUnit.DAYS.between(cuota0.getFechaVencimiento(), hoy);
                 return "La fecha límite de separación venció hace " + diasAtraso + " días (" + cuota0.getFechaVencimiento() + ").";
             }
         }
+
         return null;
     }
 
@@ -513,6 +518,31 @@ public class ContratoService {
             return actualizado;
         }
         return contrato;
+    }
+
+    @Transactional
+    public Contrato liberarLote(Long contratoId, String observacion) {
+        Contrato contrato = contratoRepository.findById(contratoId)
+                .orElseThrow(() -> new RuntimeException("Contrato no encontrado"));
+
+        if (contrato.getEstadoContrato() == EstadoContrato.LIBERADO) {
+            throw new RuntimeException("Este contrato ya se encuentra liberado.");
+        }
+
+        // 1. Liberar el lote dejándolo disponible para una nueva venta
+        Lote lote = contrato.getLote();
+        lote.setEstadoVenta(EstadoLote.DISPONIBLE);
+        loteRepository.save(lote);
+
+        // 2. Cambiar el estado del contrato
+        contrato.setEstadoContrato(EstadoContrato.LIBERADO);
+        Contrato contratoActualizado = contratoRepository.save(contrato);
+
+        // 3. Registrar el hito en el historial del contrato
+        String motivo = (observacion != null && !observacion.trim().isEmpty()) ? observacion : "Liberación de lote por falta de pago o anulación.";
+        contratoHistorialService.registrarHito(contratoActualizado, "LOTE_LIBERADO", "El lote regresó a estado DISPONIBLE y el contrato fue cerrado.", motivo, null);
+
+        return contratoActualizado;
     }
 
     @Transactional(readOnly = true)
