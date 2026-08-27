@@ -582,9 +582,9 @@ public class ContratoService {
         context.setVariable("fechaCuotaCero", fechaCuotaCero);
         context.setVariable("diasValidez", diasValidez > 0 ? diasValidez : 0);
         context.setVariable("cuotasMensuales", cuotasMensuales);
-        context.setVariable("imgCabecera", getImagenBase64("cabezera.png"));
+        context.setVariable("imgCabecera", getImagenBase64("cabezera_v2.png"));
         context.setVariable("imgPie", getImagenBase64("pie.png"));
-        context.setVariable("imgFondo", getImagenBase64("fondo.png"));
+        context.setVariable("imgFondo", getImagenBase64("fondo_v2.png"));
         String precioTotalLetras = NumeroALetrasConverter.convertir(contrato.getPrecioTotal(), "SOLES");
         context.setVariable("precioTotalLetras", precioTotalLetras);
 
