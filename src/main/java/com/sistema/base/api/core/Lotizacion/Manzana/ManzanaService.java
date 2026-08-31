@@ -60,6 +60,7 @@ public class ManzanaService {
                 .orElseThrow(() -> new RuntimeException("La etapa asignada no existe"));
 
         manzana.setNombre(request.getNombre());
+        manzana.setAreaTotal(request.getAreaTotal());
         manzana.setEtapa(etapa);
         manzana.setEnabled(request.isEnabled());
         return manzanaRepository.save(manzana);

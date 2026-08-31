@@ -8,6 +8,7 @@ import com.sistema.base.api.core.Financiamiento.Cuota.CuotaRepository;
 import com.sistema.base.api.core.Financiamiento.Pago.PagoRepository;
 import com.sistema.base.api.core.Lotizacion.Lote.EstadoLote;
 import com.sistema.base.api.core.Lotizacion.Lote.LoteRepository;
+import com.sistema.base.api.core.Lotizacion.Manzana.ManzanaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -21,6 +22,7 @@ public class DashboardService {
     private final ContratoRepository contratoRepository;
     private final CuotaRepository cuotaRepository;
     private final PagoRepository pagoRepository; // ✅ INYECTADO
+    private final ManzanaRepository manzanaRepository;
 
     public DashboardResponseDTO getDashboardData(Long urbanizacionId, Long etapaId, Long manzanaId, Integer anio) {
         if (anio == null) {
@@ -50,6 +52,10 @@ public class DashboardService {
         Double porcentajeVentasCantidad = (totalLotes > 0) ? (lotesVendidos * 100.0 / totalLotes) : 0.0;
         Double porcentajeVentasMonto = (valorTotal > 0) ? (valorVendido * 100.0 / valorTotal) : 0.0;
 
+        // Áreas para Comparación
+        Double areaTotalManzana = safeDouble(manzanaRepository.sumAreaTotalManzanas(urbanizacionId, etapaId, manzanaId));
+        Double areaVendidaManzana = safeDouble(loteRepository.sumAreaLotesByEstado(EstadoLote.VENDIDO, urbanizacionId, etapaId, manzanaId));
+
         DashboardKpiDTO kpis = DashboardKpiDTO.builder()
                 .totalLotes(totalLotes)
                 .lotesVendidos(lotesVendidos)
@@ -65,6 +71,8 @@ public class DashboardService {
                 .totalContratado(totalContratado) // ✅ Enviado al front
                 .totalRecaudado(totalCobrado)     // ✅ Enviado al front
                 .porcentajeRecaudacion(Math.round(porcentajeEficienciaCobro * 100.0) / 100.0)
+                .areaTotalManzana(Math.round(areaTotalManzana * 100.0) / 100.0)
+                .areaVendidaManzana(Math.round(areaVendidaManzana * 100.0) / 100.0)
                 .build();
 
         // Gráficos

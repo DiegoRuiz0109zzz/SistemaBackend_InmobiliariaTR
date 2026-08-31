@@ -18,6 +18,9 @@ public class Manzana {
     @Column(nullable = false)
     private String nombre; // Ej: "A", "B", "C"
 
+    @Column(nullable = true)
+    private Double areaTotal;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "etapa_id", nullable = false)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
