@@ -23,4 +23,10 @@ public interface ManzanaRepository extends JpaRepository<Manzana, Long> {
             @Param("etapaId") Long etapaId,
             @Param("nombre") String nombre,
             Pageable pageable);
+
+    @Query("SELECT COALESCE(SUM(m.areaTotal), 0.0) FROM Manzana m WHERE m.enabled = true " +
+           "AND (:urbanizacionId IS NULL OR m.etapa.urbanizacion.id = :urbanizacionId) " +
+           "AND (:etapaId IS NULL OR m.etapa.id = :etapaId) " +
+           "AND (:manzanaId IS NULL OR m.id = :manzanaId)")
+    Double sumAreaTotalManzanas(@Param("urbanizacionId") Long urbanizacionId, @Param("etapaId") Long etapaId, @Param("manzanaId") Long manzanaId);
 }

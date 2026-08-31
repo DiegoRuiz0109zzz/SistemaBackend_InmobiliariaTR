@@ -33,4 +33,8 @@ public class DashboardKpiDTO {
     // ✅ NUEVOS CAMPOS AÑADIDOS
     private Double totalContratado;
     private Double totalRecaudado;
+
+    // Área Manzanas vs Lotes Vendidos
+    private Double areaTotalManzana;
+    private Double areaVendidaManzana;
 }

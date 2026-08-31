@@ -56,6 +56,12 @@ public interface LoteRepository extends JpaRepository<Lote, Long> {
            "AND (:manzanaId IS NULL OR l.manzana.id = :manzanaId)")
     Double sumValorLotesByEstado(@Param("estado") EstadoLote estado, @Param("urbanizacionId") Long urbanizacionId, @Param("etapaId") Long etapaId, @Param("manzanaId") Long manzanaId);
 
+    @Query("SELECT COALESCE(SUM(l.area), 0.0) FROM Lote l WHERE l.enabled = true AND l.estadoVenta = :estado " +
+           "AND (:urbanizacionId IS NULL OR l.manzana.etapa.urbanizacion.id = :urbanizacionId) " +
+           "AND (:etapaId IS NULL OR l.manzana.etapa.id = :etapaId) " +
+           "AND (:manzanaId IS NULL OR l.manzana.id = :manzanaId)")
+    Double sumAreaLotesByEstado(@Param("estado") EstadoLote estado, @Param("urbanizacionId") Long urbanizacionId, @Param("etapaId") Long etapaId, @Param("manzanaId") Long manzanaId);
+
     @Query("SELECT new com.sistema.base.api.core.Dashboard.dtos.MensualChartDTO(" +
             "CAST(MONTH(c.fechaContrato) AS string), COUNT(c), SUM(c.precioTotal)) " +
             "FROM Contrato c WHERE YEAR(c.fechaContrato) = :anio AND " +
