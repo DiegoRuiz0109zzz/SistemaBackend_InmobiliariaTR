@@ -429,7 +429,7 @@ public class PagoService {
         context.setVariable("contrato", contrato);
         context.setVariable("montoEnLetras", NumeroALetrasConverter.convertir(totalAbonado, "SOLES"));
         context.setVariable("empresa", empresa);
-        context.setVariable("imgLogo", getImagenBase64("logo_terranort.png"));
+        context.setVariable("imgLogo", getImagenBase64("logo_terranort_v2.1.png"));
 
         return compilarPdf("nota-abono", context);
     }
@@ -451,7 +451,7 @@ public class PagoService {
         context.setVariable("contrato", contrato);
         context.setVariable("montoEnLetras", NumeroALetrasConverter.convertir(totalAbonado, "SOLES"));
         context.setVariable("empresa", empresa);
-        context.setVariable("imgLogo", getImagenBase64("logo_terranort.png"));
+        context.setVariable("imgLogo", getImagenBase64("logo_terranort_v2.1.png"));
 
         return compilarPdf("comprobante-electronico", context);
     }
@@ -473,7 +473,7 @@ public class PagoService {
         context.setVariable("contrato", contrato);
         context.setVariable("montoEnLetras", NumeroALetrasConverter.convertir(totalAbonado, "SOLES"));
         context.setVariable("empresa", empresa);
-        context.setVariable("imgLogo", getImagenBase64("logo_terranort.png"));
+        context.setVariable("imgLogo", getImagenBase64("logo_terranort_v2.1.png"));
 
         return compilarPdf("recibo-ingreso", context);
     }

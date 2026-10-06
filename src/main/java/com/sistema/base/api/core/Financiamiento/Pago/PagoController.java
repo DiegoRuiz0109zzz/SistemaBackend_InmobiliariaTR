@@ -41,8 +41,7 @@ public class PagoController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaHasta) {
 
         Page<Pago> pagosPaginados = pagoService.listarPagosPaginadosConFiltros(
-                page, size, metodoPago, tipoComprobante, estado, fechaDesde, fechaHasta
-        );
+                page, size, metodoPago, tipoComprobante, estado, fechaDesde, fechaHasta);
 
         return ResponseEntity.ok(pagosPaginados);
     }
@@ -57,7 +56,8 @@ public class PagoController {
             @RequestParam(value = "descripcion", required = false) String descripcion,
             @RequestParam(value = "voucher", required = false) MultipartFile voucherFile) {
 
-        return ResponseEntity.ok(pagoService.registrarPago(cuotaId, montoAbonado, metodoPago, numeroOperacion, descripcion, voucherFile));
+        return ResponseEntity.ok(pagoService.registrarPago(cuotaId, montoAbonado, metodoPago, numeroOperacion,
+                descripcion, voucherFile));
     }
 
     @PutMapping(value = "/{id}/procesar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -69,7 +69,8 @@ public class PagoController {
             @RequestParam(value = "descripcion", required = false) String descripcion,
             @RequestParam(value = "voucher", required = false) MultipartFile voucherFile) {
 
-        List<Pago> pagosProcesados = pagoService.procesarPagoPendiente(id, metodoPago, numeroOperacion, descripcion, voucherFile);
+        List<Pago> pagosProcesados = pagoService.procesarPagoPendiente(id, metodoPago, numeroOperacion, descripcion,
+                voucherFile);
         return ResponseEntity.ok(pagosProcesados);
     }
 
@@ -84,7 +85,8 @@ public class PagoController {
     @PreAuthorize("hasAuthority('PROCESAR_PAGO')")
     public ResponseEntity<String> recalcularAtrasos(@PathVariable Long contratoId) {
         pagoService.recalcularAtrasosPorContrato(contratoId);
-        return ResponseEntity.ok("Sincronización y recálculo de días de retraso completado para el contrato N°: " + contratoId);
+        return ResponseEntity
+                .ok("Sincronización y recálculo de días de retraso completado para el contrato N°: " + contratoId);
     }
 
     @GetMapping("/comprobante/{numeroComprobante}/pdf")
@@ -135,7 +137,8 @@ public class PagoController {
             @RequestParam("montos") List<Double> montos,
             @RequestParam(value = "vouchers", required = false) List<MultipartFile> vouchers) {
 
-        List<Pago> pagosOficiales = pagoService.conciliarReciboCaja(numeroRecibo, bancos, operaciones, montos, vouchers);
+        List<Pago> pagosOficiales = pagoService.conciliarReciboCaja(numeroRecibo, bancos, operaciones, montos,
+                vouchers);
         return ResponseEntity.ok(pagosOficiales);
     }
 
@@ -155,7 +158,6 @@ public class PagoController {
         return ResponseEntity.ok(pagoService.obtenerReporteCajaFisica());
     }
 
-
     @PostMapping("/facturacion/registrar-pago")
     @PreAuthorize("hasAuthority('CREAR_PAGO')")
     public ResponseEntity<List<Pago>> registrarPagoYEmitirSunatJson(@RequestBody PagoSunatRequest request) {
@@ -172,8 +174,7 @@ public class PagoController {
                 request.getTipoDoc(),
                 request.getRuc(),
                 request.getRazonSocial(),
-                request.getDireccionFactura()
-        );
+                request.getDireccionFactura());
 
         return ResponseEntity.ok(pagosRealizados);
     }
@@ -189,9 +190,9 @@ public class PagoController {
             @RequestParam(required = false) String direccionFactura) {
         try {
             List<Pago> resultado = pagoService.convertirNotaAbonoABoleta(
-                    numeroNotaAbono, prefijoSerieBoleta, tipoIgv, ruc, razonSocial, direccionFactura
-            );
-            return ResponseEntity.ok(Map.of("success", true, "message", "Nota de abono convertida a boleta exitosamente", "data", resultado));
+                    numeroNotaAbono, prefijoSerieBoleta, tipoIgv, ruc, razonSocial, direccionFactura);
+            return ResponseEntity.ok(Map.of("success", true, "message",
+                    "Nota de abono convertida a boleta exitosamente", "data", resultado));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", e.getMessage()));
         }
